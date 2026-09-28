@@ -8,7 +8,7 @@ Aufwand: S = Tage, M = Wochen, L = Monate, XL = viele Monate.
 
 ## M0 – Werkzeugkette und Boot (S–M)
 
-- Entscheidung über die Kernel-Sprache ([00](00-vision.md#offene-entscheidungen))
+- C11-Grundgerüst: Compiler-Flags, Linker-Skript, `-ffreestanding` für den Kernel ([00](00-vision.md#getroffene-entscheidungen))
 - Cross-Toolchain, Build-System, Boot-Image-Werkzeug
 - Limine-Boot unter QEMU (x86-64, UEFI über OVMF), serielle Ausgabe
 - CI: Build, QEMU-Boot, Größenmessung des Kernels
@@ -50,7 +50,7 @@ ein Widerruf funktioniert.
 
 ## M4 – Chromium in Software (XL)
 
-- Toolchain, GN-Plattform `rctos`, Entscheidung zu Rust `std`
+- Toolchain, GN-Plattform `rctos`, Umgang mit Chromiums eigenen Rust-Komponenten ([06](06-chromium.md#build))
 - base, PartitionAlloc, V8-Plattform, Mojo im Einzelprozessmodus
 - Ozone `rctos` Stufe G0
 

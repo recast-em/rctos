@@ -60,4 +60,5 @@ docs/
 
 - Die Dokumente sind auf Deutsch, Bezeichner im Code auf Englisch.
 - Größenangaben sind binär: KiB, MiB, GiB.
+- Implementierungssprache ist C11, kein Rust (siehe [00](docs/00-vision.md#getroffene-entscheidungen)).
 - Kernel-Typen beginnen mit `rc_`, Aufrufe mit `sys_` (System-Kit), `drv_` (Treiber-Kit) oder `usr_` (User-Kit).

@@ -96,12 +96,15 @@ Page-Flip, Overlays) und `flatland` (Fuchsia).
   bzw. `aarch64-unknown-rctos`, `--sysroot` auf den musl-Port und libc++ aus dem
   Chromium-Baum. Clang akzeptiert unbekannte OS-Namen im Triple, eine Anpassung an LLVM ist
   nicht nötig.
-- **Rust:** Neuere Chromium-Versionen enthalten Rust-Komponenten, die `std` verwenden.
-  Das ist ein **erkanntes Risiko**. Möglichkeiten:
-  1. eine eigene Rust-Zielplattform mit `std`-Port (sauber, aber aufwendig);
-  2. die `linux-musl`-Variante von `std` gegen den rctos-musl-Port. Das geht nur, wenn die
-     libc die wenigen direkten Linux-Syscalls von `std` übersetzt, etwa `futex`;
-  3. die betroffenen Komponenten per GN-Argument abschalten, solange das möglich ist.
+- **Rust:** rctos selbst enthält kein Rust ([00](00-vision.md#getroffene-entscheidungen)).
+  Neuere Chromium-Versionen bringen aber eigene Rust-Komponenten mit, die `std` verwenden.
+  Das ist ein **erkanntes Risiko**. Möglichkeiten, in dieser Reihenfolge der Präferenz:
+  1. die betroffenen Komponenten per GN-Argument abschalten bzw. durch C++-Alternativen
+     ersetzen, solange Chromium das zulässt;
+  2. die `linux-musl`-Variante von `std` gegen den rctos-musl-Port bauen. Das geht nur,
+     wenn die libc die wenigen direkten Linux-Syscalls von `std` übersetzt, etwa `futex`.
+     Das bleibt reiner Fremdcode im Chromium-Build, nicht Teil von rctos;
+  3. eine eigene Rust-Zielplattform mit `std`-Port (aufwendig, nur als letzter Ausweg).
 
   Entschieden wird in M4, nachdem geprüft wurde, welche Komponenten zu diesem Zeitpunkt
   zwingend sind.
@@ -126,7 +129,7 @@ Page-Flip, Overlays) und `flatland` (Fuchsia).
 | Mojo und Prozessstart | mittel | gering (Fuchsia-Vorlage) |
 | Ozone G0 | gering | gering |
 | Ozone G1/G2 und Vulkan-Erweiterungen | hoch | mittel |
-| Build-System und Toolchain | mittel | **hoch (Rust `std`)** |
+| Build-System und Toolchain | mittel | **hoch (Chromiums Rust-Komponenten)** |
 | laufende Pflege | dauerhaft | hoch, wenn die Patches ausufern |
 
 Die Chromium-Portierung ist mit Abstand der größte Einzelposten des Projekts. Kernel und

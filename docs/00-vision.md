@@ -100,13 +100,18 @@ gestartet wird. Ein Profil ist eine Textdatei im Boot-Image, die `init` liest.
 | `embedded` | + Dateisystem, efifb bzw. Display-Treiber, Eingabe, optional Netz | Kiosk, Steuerung, Anzeige ohne Browser |
 | `desktop` | + GPU-Treiber, Netz, Audio, Chromium | das vollständige System |
 
+## Getroffene Entscheidungen
+
+| Thema | Entscheidung | Begründung |
+|---|---|---|
+| Sprache für Kernel, Kits, Dienste und Treiber | **C11** (freestanding im Kernel), übersetzt mit Clang; Assembler nur in der Architekturschicht. **Kein Rust im eigenen Code.** | Vorgabe des Projekts; C passt nahtlos zu musl, Mesa und den C-ABIs der Kits |
+
 ## Offene Entscheidungen
 
 | Thema | Empfehlung | Alternative | Fällig bis |
 |---|---|---|---|
-| Sprache für Kernel und eigene Dienste | Rust (`no_std`, `panic=abort`, `opt-level="z"`) mit C-ABI an allen Grenzen | C11 | M0 |
 | Beschreibung der Protokolle | handgeschriebene C-Header mit festen Struct-Layouts; ein Generator erst, wenn es mehr als etwa 10 Protokolle gibt | eigene kleine IDL | M2 |
-| Netzstack | lwIP (C, klein, ausgereift) | smoltcp (Rust) | M3 |
+| Netzstack | lwIP (C, klein, ausgereift) | eigener minimaler IPv4/IPv6-Stack in C | M3 |
 | System-Dateisystem | ext2 (einfach, verbreitet), dazu FAT32 für die EFI-Partition | littlefs (Embedded, robust bei Stromausfall) | M3 |
 | ARM-Referenzboard | Raspberry Pi 5 (V3D, Mesa `v3dv`) | RK3588-Board (Mali-G610, Mesa `panvk`) | M9 |
 
