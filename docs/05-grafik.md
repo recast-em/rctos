@@ -3,8 +3,8 @@
 ## Überblick
 
 ```
-┌──────────────────────────── Chromium ────────────────────────────┐
-│ Browser-Prozess: Ash/Fensterverwaltung, Eingabe über Ozone        │
+┌──────────────────── Gast: Chromium (surf) ───────────────────────┐
+│ Einbetter:   Fensterverwaltung auf Aura, Eingabe über Ozone       │
 │ GPU-Prozess:     Viz → Skia (Vulkan) → ANGLE (WebGL über Vulkan)  │
 │                  Ozone-Plattform „rctos“                         │
 │                  Treibermodul: Mesa-Vulkan-ICD (z. B. anv)        │
@@ -28,6 +28,27 @@ Die Grundsätze:
   etwa einem ARM-SoC mit eigenem Display-Controller, sind es zwei Treiber.
 - **Nur Vulkan.** Chromium nutzt Vulkan für Skia und ANGLE-auf-Vulkan für WebGL, genau wie
   auf Fuchsia. Einen OpenGL-Treiber wie Mesa `iris` braucht es nicht.
+
+## Zwei Welten auf einem Bildschirm
+
+Der Bildschirm gehört der Mikro-Welt; der Gast bekommt ihn geliehen.
+
+| Wer | Wie er zeichnet | Wann |
+|---|---|---|
+| Kernel | Boot-Konsole direkt in den Firmware-Framebuffer (Zellen 8 × 16, CP437) | beim Boot und bei einer Panik |
+| `console` (Bodenkonsole) | Zellen per `map_framebuffer` in den geleasten Scanout-Speicher, nur geänderte Zellen | immer, wenn niemand sonst die Lease hat |
+| `login` | Vollbild-Oberfläche, ebenfalls Zellen | Anmeldung, Sperre, sichere Tastenkombination |
+| Programme der Mikro-Welt | direkt in den Framebuffer (`framebuffer.map`) | geliehen von der Konsole |
+| Gast | Vulkan, `present` auf seine Grafikpuffer | solange er die Lease hält |
+
+- **Die Lease ist ein Handle, kein Zustand im Treiber.** Endet der Gast oder stürzt er ab,
+  verfällt die Lease, und der Anzeige-Teil gibt den Bildschirm an die Konsole zurück. Die
+  Konsole zeichnet dann ihre Zellen neu; weil sie keinen Rückspeicher hat, beginnt sie mit
+  leerem Bildschirm.
+- **Die sichere Tastenkombination** lässt der Eingabedienst nie an den Gast durch. Sie
+  widerruft die Lease des Gasts vorübergehend und gibt den Bildschirm an `login`.
+- **Die Zellenkonsole ist ein C-Modul** (`con.c`), das Kernel und `console` gemeinsam
+  benutzen: dieselbe Schrift, dieselbe Palette, dieselben Regeln.
 
 ## Grafikpuffer
 

@@ -1,126 +1,248 @@
-# 00 – Vision und Budgets
+# 00 – Leitbild, Vision und Budgets
 
-## Ziel
+## Kernsatz
 
-rctos soll zeigen, dass ein modernes, GPU-beschleunigtes Web-Betriebssystem auf einem
-winzigen Kern stehen kann. Klein und schnell soll dabei vor allem der Unterbau sein:
-Kernel, Basisdienste und Treiber. Die großen Brocken, also Chromium, GPU-Treiber-Userspace
-und Netzstack, laufen als gewöhnliche Prozesse darüber, bringen ihren Speicherbedarf mit
-und belasten den Kern nicht.
+**Viel erreichen mit wenig Ressourcen.** rctos überträgt das Paradigma seines kleinen
+Geschwisters RCP-OS (Recaster Pico) auf PC- und ARM-Hardware: ein System, das man ganz
+überblicken, messen und lesen kann. Es rückt in den Hintergrund und lässt Platz für das,
+worum es geht, nämlich Code, Inhalte und Verbindungen der Nutzer.
 
-Die Oberfläche ist eine Chromium-Instanz, die den Bildschirm direkt ansteuert. Einen
-Fenster-Server, X11, Wayland oder Android gibt es nicht. Chromium ist sein eigener
-Compositor.
+Die heutige Umgebung aus Schichten, Diensten „für alle Fälle“ und unsichtbaren
+Automatismen weicht einer **überwachbaren, inspizierbaren, kleinen Mikro-Umgebung**.
+
+## Zwei Welten
+
+| | Mikro-Welt | Gast |
+|---|---|---|
+| Was | Kernel, Dienste, Treiber, Werkzeuge, Bodenkonsole, Systemoberflächen | Chromium mit seinen Begleitern: Mesa-Treibermodul, musl-libc, ICU, Schriften |
+| Maßstab | jedes Byte hat einen Namen und ein Budget | eigenes Kontingent aus `main.cfg`, gemessen und begrenzt |
+| Code | eigener, lesbarer C-Code; ein Mensch kann ihn ganz lesen | übernommen; Änderungen nur als Patch-Stapel |
+| Schnittstellen | Kits und Protokolle, kein POSIX | POSIX-Teilmenge als Bibliothek, **nur** im Gast |
+| Zeichensatz | ein Byte, ein Zeichen (CP437) | Unicode |
+| Ohne den anderen | voll funktionsfähig: Konsole, Dateien, Netz, Anmeldung | läuft nie ohne die Mikro-Welt |
+
+Chromium ist die Grundlage der Fensterverwaltung und der Oberfläche. Es ist aber **die
+eine Ausnahme** vom Paradigma und bleibt ein Gast: Es bekommt den Bildschirm geliehen,
+lebt in einem festen Kontingent und lässt sich beenden und neu starten, ohne dass die
+Mikro-Welt es merkt. Alles um den Gast herum tritt deutlich kleiner auf und bleibt im
+Hintergrund.
+
+## Leitsätze
+
+Jeder Leitsatz stammt aus der Praxis von RCP-OS; rechts steht, was er in rctos bedeutet.
+
+### Klein bleiben
+
+1. **Der Kernel macht nur, was nur der Kernel kann:** Adressräume, Threads, Scheduling,
+   IPC, Handles, Interrupt-Weiterleitung, Zeit. Alles andere ist ein Prozess.
+2. **Flach statt geschichtet.** Ein Aufruf ist eine C-Funktion, die eine Sache tut. Keine
+   Zwischenschichten „für später“, keine Callback-Kaskaden, keine Frameworks.
+3. **Statisch statt dynamisch.** Jedes Programm ist eine statisch gelinkte ELF-Datei. Die
+   einzige Ausnahme, Treibermodule im Gast, ist eng geregelt ([04](04-treibermodell.md)).
+4. **Die Mikro-Welt braucht keine libc.** Ihre Programme benutzen nur die Kits
+   ([02](02-syscalls-und-kits.md)). POSIX gibt es als Bibliothek, und zwar nur für den Gast
+   ([06](06-chromium.md)).
+5. **Übernehmen statt neu schreiben** nur dort, wo Eigenbau weder Größe noch Klarheit
+   bringt: Chromium, Mesa, musl für den Gast, lwIP für das Netz. Übernommener Code wird
+   getrennt gezählt.
+
+### Sichtbar sein
+
+6. **Messen statt schätzen.** Budgets für Größe, RAM, Codezeilen und Bootzeit. Der Kernel
+   prüft sie beim Start selbst und schreibt die Zeile `gate OK` oder `gate FAILED`
+   (wie der `bench GATE` von RCP-OS); die CI prüft dieselben Zahlen aus derselben Quelle.
+7. **Alles ist inspizierbar.** Der Zustand des Systems liegt als lesbare Tabellen unter
+   `/now` (Prozesse, Speicher, Geräte, Ressourcen, Datenträger, Netz, Budgets). Wer wissen
+   will, was los ist, liest eine Datei ([09](09-mikro-welt.md#now--der-zustand-als-tabellen)).
+8. **Fehler sind Exponate.** Ein Absturz endet nie still: Ein abgestürzter Prozess bleibt
+   mit Registern und Ursache sichtbar, bis jemand ihn abräumt; eine Kernel-Panik zeigt
+   alles auf dem Bildschirm und auf der seriellen Schnittstelle.
+9. **Eine Wahrheit pro Tatsache.** Layouts stehen einmal als C-Header mit
+   `_Static_assert`; dasselbe C-Modul läuft in Kernel, Werkzeugen und Tests (etwa
+   `budget.h`, der Dateisystemtreiber, der `main.cfg`-Parser). Entscheidungen stehen mit
+   Datum in den Dokumenten, und das Dokument wird zuerst geändert.
+
+### Ehrlich sein
+
+10. **Explizit statt automatisch.** Kein Overcommit, kein OOM-Killer, kein automatisches
+    Auslagern, keine Hintergrunddienste „für alle Fälle“, keine Caches ohne feste Grenze,
+    keine Updates oder Telemetrie im Hintergrund. Speicherdruck ist ein Ereignis, auf das
+    Programme reagieren; Auslagern ist ein bewusster Lebenszyklus-Schritt (Suspend).
+11. **Grenzen sind Entscheidungen.** Namenslänge, Warteschlangentiefen, Logrößen, Handles
+    pro Prozess: Jede Grenze ist ein bewusst gewählter, dokumentierter Wert, kein Zufall
+    und kein „unbegrenzt“.
+12. **Keine Rechte ohne Handle.** Was ein Prozess darf, steht vollständig in seiner
+    Handle-Tabelle. Es gibt keine globale Autorität.
+13. **Direktzugriff ist erlaubt, wenn er ausdrücklich vergeben wurde** und widerrufbar
+    ist: ein flach gemappter Framebuffer, IO-Ports, eine Lease auf den Bildschirm.
+
+### Menschlich sein
+
+14. **Einschalten und tippen.** Die leere Oberfläche ist eine Konsole mit Prompt, wie beim
+    Heimcomputer. Es gibt keinen Splash-Screen; ein Banner ist Konfiguration.
+15. **Ein Byte, ein Zeichen, in der Mikro-Welt.** Konsole, Meldungen, Konfiguration und
+    Namen verwenden CP437 bzw. ASCII. Unicode ist Sache des Gasts.
+16. **Eine Konfigurationsdatei.** `/sys/main.cfg` im Format `key = value`, beim Boot einmal
+    gelesen. Ein unbekannter Schlüssel macht die ganze Datei ungültig, und das System startet
+    mit dem Referenzprofil.
+17. **Austauschbar über Protokolle, nicht über Bibliotheken.** Wer mit einem Treiber
+    spricht, spricht mit einer Geräteklasse. Wer mit dem Gast spricht, spricht mit einem
+    Prozess, dem man den Bildschirm wieder abnehmen kann.
 
 ## Nicht-Ziele
 
-- **Volle POSIX-Kompatibilität.** Es gibt kein `fork`, keine Signale im Kernel, keine
-  Unix-Benutzerrechte und keine Dateideskriptoren im Kernel. Eine POSIX-Teilmenge gibt es
-  nur als Bibliothek (siehe [06](06-chromium.md)).
+- **Volle POSIX-Kompatibilität.** Kein `fork`, keine Signale, keine Unix-Rechte, keine
+  Dateideskriptoren im Kernel. Die POSIX-Teilmenge gehört dem Gast.
 - **Binärkompatibilität** zu Linux, Windows oder Android.
-- **Mikrocontroller ohne MMU.** „Embedded“ meint hier Geräte der Klasse ARMv8-A oder x86-64
-  mit MMU, also etwa Einplatinenrechner, Kiosk- und Industrie-PCs oder Thin Clients.
+- **Mikrocontroller ohne MMU.** Die gehören RCP-OS. „Embedded“ meint hier ARMv8-A oder
+  x86-64 mit MMU: Einplatinenrechner, Kiosk- und Industrie-PCs, Thin Clients.
 - **32-Bit-Architekturen.**
 - **Eine eigene Browser-Engine.** Chromium wird portiert, nicht ersetzt.
-- **Ein Objekt-Framework im Kernel.** Also keine Vererbung, keine Reflexion und kein
-  generischer Property-Baum.
-
-## Prinzipien
-
-1. **Der Kernel macht nur, was nur der Kernel kann:** Adressräume, Threads, Scheduling,
-   IPC, Handles, Interrupt-Weiterleitung und Zeit. Alles andere läuft als Prozess.
-2. **Keine Rechte ohne Handle.** Es gibt keine globale Autorität (keine „ambient
-   authority“): Was ein Prozess darf, steht vollständig in seiner Handle-Tabelle.
-3. **Flach statt geschichtet.** Ein Aufruf ist eine C-Funktion, die genau eine Sache tut.
-   Es gibt keine Callback-Kaskaden und keine Zwischenschichten „für später“.
-4. **Statisch statt dynamisch.** Jedes Programm ist eine statisch gelinkte ELF-Datei. Die
-   einzige Ausnahme, Treibermodule, ist eng geregelt ([04](04-treibermodell.md)).
-5. **Austauschbarkeit über Protokolle, nicht über Bibliotheken.** Wer mit einem Treiber
-   spricht, spricht mit einer Geräteklasse und nicht mit einer Implementierung.
-6. **Direktzugriff ist erlaubt, wenn er ausdrücklich vergeben wurde.** Ein flach gemappter
-   Framebuffer oder IO-Ports sind in Ordnung, solange ein Handle dazu vergeben und
-   widerrufbar ist.
-7. **Messen statt schätzen.** Die Budgets unten prüft die CI bei jedem Commit.
-8. **Übernehmen statt neu schreiben**, wo Eigenbau weder Größe noch Architektur verbessert:
-   musl, Mesa, Chromium, ein Netzstack.
+- **Ein Objekt-Framework im Kernel**, ebenso wenig Plug-in-Systeme in der Mikro-Welt.
 
 ## Budgets
 
-### Größe auf dem Datenträger
+Die Zahlen des Kernels stehen in [`kernel/core/budget.h`](../kernel/core/budget.h); Kernel
+und `tools/budget.py` lesen dieselbe Datei. Dieses Dokument ändert sich nur zusammen mit ihr.
 
-| Komponente | Harte Grenze | Ziel |
+### Größe
+
+| Komponente | Harte Grenze | Ziel | Stand M0 |
+|---|---|---|---|
+| Kernel-Image | 1 MiB | ≤ 256 KiB | 28 KiB |
+| Mikro-Welt auf dem Datenträger (Kernel, Dienste, Treiber, Werkzeuge) | 10 MiB | ≤ 2 MiB | – |
+| Gast (Chromium, Mesa-Modul, libc, Daten) | – | gemessen und ausgewiesen | – |
+
+### Code
+
+| Komponente | Ziel | Stand M0 |
 |---|---|---|
-| Kernel-Image (`.text` + `.rodata` + `.data`) | 1 MiB | ≤ 256 KiB |
-| Basissystem (Kernel, init, devmgr, Basistreiber, Shell) | 10 MiB | ≤ 4 MiB |
-| Mesa-ICD (je Treiber) | – | wird gemessen, kein Budget |
-| Chromium | – | wird gemessen, kein Budget |
+| Kernel, eigener Code (Kern und eine Architektur; C und Assembler, ohne Leer- und Kommentarzeilen) | ≤ 10.000 Zeilen | 1.472 |
+| Mikro-Welt gesamt, eigener Code | ≤ 60.000 Zeilen | – |
+| Übernommener Code (lwIP, musl, Mesa, Chromium) | wird getrennt ausgewiesen | – |
 
 ### RAM, resident
 
-Gemessen wird im Profil `minimal` (siehe unten) nach dem Boot im Leerlauf, und zwar alle
-physischen Seiten, die Kernel und Prozesse belegen. Nicht mitgezählt werden von der
-Firmware reservierter Speicher, ACPI-Tabellen und das Framebuffer-Memory der Firmware.
+Gemessen wird im Profil `minimal` nach dem Boot im Leerlauf: alle physischen Seiten, die
+Kernel und Prozesse belegen. Nicht mitgezählt werden Firmware-Speicher, ACPI-Tabellen und
+der Framebuffer.
 
-| Posten | Ziel |
-|---|---|
-| Kernel-Code und -Konstanten | 160 KiB |
-| Kernel-Daten, Objekt-Pools, Handle-Tabellen | 48 KiB |
-| Pro CPU (Kernel-Stacks, TSS/Vektortabelle, Run-Queue) | 16 KiB |
-| Direct-Map-Seitentabellen (1-GiB-Seiten) | 8 KiB |
-| `init` (mit Namensdienst und Starter) | 80 KiB |
-| `devmgr` | 72 KiB |
-| Treiber `uart16550` | 48 KiB |
-| `shell` | 64 KiB |
-| **Summe (1 CPU)** | **≤ 496 KiB**, harte Grenze 512 KiB |
+| Posten | Ziel | Stand M0 |
+|---|---|---|
+| Kernel-Code und -Konstanten | 160 KiB | 20 KiB |
+| Kernel-Daten, Objekt-Pools, Handle-Tabellen | 48 KiB | 32 KiB (mit CPU-Anteil) |
+| Pro CPU (Kernel-Stapel, TSS, Vektortabelle, Run-Queue) | 16 KiB | |
+| Direct-Map-Seitentabellen (1-GiB-Seiten) | 8 KiB | – (noch die des Bootloaders) |
+| `init` (mit Namensdienst und Starter) | 80 KiB | – |
+| `devmgr` | 72 KiB | – |
+| Treiber `uart16550` | 48 KiB | – |
+| `console` (Bodenkonsole über die serielle Schnittstelle) | 64 KiB | – |
+| **Summe (1 CPU)** | **≤ 496 KiB**, harte Grenze 512 KiB | |
 
 Jede weitere CPU kostet etwa 16 KiB. Die größten Hebel sind **Seitentabellen** (etwa
-16–24 KiB je Prozess), **Stacks** (die Seiten werden erst bei Zugriff belegt) und die
-**Zahl der Prozesse**. Deshalb beherbergt `init` im Minimalprofil den Namensdienst und
-den Starter.
+16–24 KiB je Prozess), **Stapel** (Seiten werden erst bei Zugriff belegt) und die **Zahl
+der Prozesse**. Deshalb beherbergt `init` im Minimalprofil den Namensdienst und den Starter.
 
-Messung: `sys_system_info(RC_INFO_MEMORY, …)` liefert die belegten Seiten nach Kategorie.
-`tools/budget` bootet das Image in QEMU, liest die Werte über die serielle Konsole aus und
-lässt den Build fehlschlagen, wenn eine Grenze überschritten ist.
+Messung ab M2: `/now/mem` und `/now/budget` zeigen die belegten Seiten nach Kategorie;
+`make test` liest sie über die serielle Schnittstelle und lässt den Build bei einer
+gerissenen Grenze fehlschlagen.
 
-### Was nicht ins Basisbudget fällt
+### Zeit
 
-Grafikpuffer, GUI-Daten, der Netzstack, Dateisystem-Caches, Mesa und Chromium haben eigene,
-realistische Größen und werden getrennt gemessen. Zur Orientierung: Chromium mit einem Tab
-braucht einige hundert MiB. Ein Desktop-Gerät sollte mindestens 2 GiB haben, empfohlen
-sind 4 GiB. Der Unterbau soll davon nahezu nichts abzweigen.
+| Strecke | Ziel | Stand M0 (QEMU, ohne KVM) |
+|---|---|---|
+| Kernel-Eintritt bis Leerlauf | ≤ 50 ms | 14–20 ms |
+| Übergabe des Bootloaders bis Prompt der Bodenkonsole | ≤ 1 s | – |
+| Aufwachen im Leerlauf ohne Ereignis | nur, wenn sich die angezeigte Uhr ändert | 1× pro Minute |
+
+### Der Platz für Nutzer
+
+Planwerte für ein Desktop-Gerät mit 4 GiB; die tatsächlichen Werte stehen in `/now/mem`.
+
+| Bereich | Planwert | Festgelegt durch |
+|---|---|---|
+| Mikro-Welt ohne GUI und Netz | ≤ 0,5 MiB | Budget oben |
+| Netzstack mit Puffern | ≤ 4 MiB | `net_memory` in `main.cfg` |
+| Dateisystem-Cache | fester Wert | `fs_cache` in `main.cfg` |
+| Bildschirmpuffer der Konsole und der Anzeige | ≈ 2 × Auflösung × 4 Byte | Anzeige |
+| Gast (Chromium) | Kontingent | `guest_memory` in `main.cfg` |
+| **Rest** | **frei für Inhalte und Verbindungen der Nutzer** | |
 
 ## Profile
 
-Es gibt einen Kernel und ein Userland. Die Profile unterscheiden sich nur darin, was
-gestartet wird. Ein Profil ist eine Textdatei im Boot-Image, die `init` liest.
+Es gibt einen Kernel und ein Userland. Ein Profil ist nichts weiter als der Inhalt von
+`main.cfg`: Welche Dienste starten, welcher Gast, welche Kontingente. Die Bodenkonsole gibt
+es in jedem Profil.
 
 | Profil | Inhalt | Zweck |
 |---|---|---|
-| `minimal` | Kernel, init, devmgr, uart16550, shell | Budget-Nachweis, Kernel-Tests |
-| `embedded` | + Dateisystem, efifb bzw. Display-Treiber, Eingabe, optional Netz | Kiosk, Steuerung, Anzeige ohne Browser |
-| `desktop` | + GPU-Treiber, Netz, Audio, Chromium | das vollständige System |
+| `minimal` | Kernel, init, devmgr, uart16550, console | Budget-Nachweis, Kernel-Tests |
+| `embedded` | + Dateisystem, Anzeige, Eingabe, optional Netz; Programme der Mikro-Welt | Kiosk, Steuerung, Anzeige ohne Browser |
+| `desktop` | + GPU-Treiber, Netz, Audio, der Gast | das vollständige System |
 
-## Getroffene Entscheidungen
+## Familie RCP-OS
 
-| Thema | Entscheidung | Begründung |
-|---|---|---|
-| Sprache für Kernel, Kits, Dienste und Treiber | **C11** (freestanding im Kernel), übersetzt mit Clang; Assembler nur in der Architekturschicht. **Kein Rust im eigenen Code.** | Vorgabe des Projekts; C passt nahtlos zu musl, Mesa und den C-ABIs der Kits |
+rctos und RCP-OS teilen Konventionen, damit Wissen, Daten und Werkzeuge zwischen beiden
+wandern können. Wo sich die Hardware unterscheidet, unterscheidet sich die Technik, nicht
+die Haltung.
+
+| Gemeinsam | In rctos |
+|---|---|
+| `main.cfg` (`key = value`, Ganz-Datei-Regel, Referenzprofil) | [09](09-mikro-welt.md#maincfg) |
+| `/now`-Tabellen, Serialisierung als kommagetrennte Zeilen | [09](09-mikro-welt.md#now--der-zustand-als-tabellen) |
+| Namensregeln (28 Byte, `0-9 A-Z a-z . _`) und uid-Bereiche, Heimat `/usr/<uid>` | [10](10-rcfs.md), [03](03-rechte.md#identität-und-sitzungen) |
+| Dateisystem-Familie rcp-fs: 4-KiB-Blöcke, 64-Byte-Einträge, Ringdateien für Logs | [10](10-rcfs.md) |
+| Bodenkonsole, Status-Kachel `HH:MM  U <uid>`, Vollbild-Oberflächen statt Popups | [09](09-mikro-welt.md) |
+| CP437 in der Konsole, ASCII in Quellen, Sonderzeichen als `\xNN` | [09](09-mikro-welt.md#zeichensatz) |
+| Recaster-Blau `#2449AA` (RGB332 `0x2A`) als Eintrag 1 der Palette | Kernel-Konsole |
+| Boot-Epoche 2026-10-09 10:10 UTC für reproduzierbare Tests | `tools/qemu.py --rtc family` |
+
+| Anders, weil die Hardware anders ist | Grund |
+|---|---|
+| Hardware-MMU statt Software-MMU und Bytecode-VM | x86-64 und ARMv8-A haben eine MMU |
+| Ausführen am Ort aus dem RAM-Boot-Image statt XIP aus Flash | PCs haben Blockgeräte, keinen memory-mapped Flash |
+| GPU und Framebuffer statt Zeilen-Compositor | die Anzeige erledigt die Hardware |
+| Unicode im Gast | das Web ist Unicode |
+
+Offene Familienfrage: Die Prompt-Sprache der Bodenkonsole soll CAST werden
+([09](09-mikro-welt.md#die-prompt-sprache)).
+
+## Entscheidungen
+
+| Datum | Entscheidung |
+|---|---|
+| 2026-09-28 | Sprache für Kernel, Kits, Dienste und Treiber ist **C11** (Kernel freestanding, Clang). Assembler nur in `kernel/arch/`. **Kein Rust im eigenen Code.** |
+| 2026-09-28 | Das **Leitbild Mikro-Umgebung** aus RCP-OS gilt; Chromium ist der Gast und die eine Ausnahme. |
+| 2026-09-28 | Mikro-Welt ohne libc; POSIX nur im Gast. |
+| 2026-09-28 | Kein Overcommit, kein OOM-Killer, kein automatisches Auslagern ([01](01-kernel.md#virtueller-speicher)). |
+| 2026-09-28 | Systemzustand als `/now`-Tabellen; Fehler als Exponate. |
+| 2026-09-28 | Dateisystem aus der rcp-fs-Familie (`rcfs`) statt ext2 ([10](10-rcfs.md)). |
+| 2026-09-28 | Konsole: CP437, 8 × 16, Schrift aus Spleen (BSD-2) mit elf eigenen Zeichen; Palette 0 = EGA mit Recaster-Blau. |
+| 2026-09-28 | Bootloader Limine 11.4.1 (Basisrevision 6), Version und Prüfsummen fest in `boot/limine.sha256`. |
 
 ## Offene Entscheidungen
 
 | Thema | Empfehlung | Alternative | Fällig bis |
 |---|---|---|---|
-| Beschreibung der Protokolle | handgeschriebene C-Header mit festen Struct-Layouts; ein Generator erst, wenn es mehr als etwa 10 Protokolle gibt | eigene kleine IDL | M2 |
-| Netzstack | lwIP (C, klein, ausgereift) | eigener minimaler IPv4/IPv6-Stack in C | M3 |
-| System-Dateisystem | ext2 (einfach, verbreitet), dazu FAT32 für die EFI-Partition | littlefs (Embedded, robust bei Stromausfall) | M3 |
+| Beschreibung der Protokolle | handgeschriebene C-Header mit festen Layouts; ein Generator erst ab etwa 10 Protokollen | eigene kleine IDL | M2 |
+| Prompt-Sprache der Bodenkonsole | CAST (Familie); M2 startet mit dem Rettungs-Prompt von RCP-OS | eigener minimaler Befehlsinterpreter | M5 |
+| Netzstack | lwIP (C, klein, ausgereift) | eigener minimaler IPv4/IPv6-Stack | M3 |
+| rcfs: Dateien über 4 GiB | v1 begrenzt auf 4 GiB je Datei (bewusste Grenze) | 64-Bit-Größe in einer Formatrevision | M3 |
+| Einbettung von Chromium | nur die Content-Schicht, eigene kleine Shell ([06](06-chromium.md#schlank-einbetten)) | vollständiger Chrome-Browser mit Ash | M4 |
 | ARM-Referenzboard | Raspberry Pi 5 (V3D, Mesa `v3dv`) | RK3588-Board (Mali-G610, Mesa `panvk`) | M9 |
 
 ## Glossar
 
 | Begriff | Bedeutung |
 |---|---|
+| Mikro-Welt | alles außer dem Gast: Kernel, Dienste, Treiber, Werkzeuge, Konsole |
+| Gast | Chromium mit Begleitern; bekommt Bildschirm und Kontingent geliehen |
+| Bodenkonsole | die Konsole, die den Bildschirm hat, wenn ihn niemand sonst hat |
+| `/now` | lesbare Tabellen mit dem aktuellen Systemzustand |
+| Exponat | ein Fehler, der sichtbar stehen bleibt, bis jemand ihn ansieht |
+| GATE | die Budgetprüfung beim Boot und in der CI |
 | Handle | prozesslokale Nummer, die auf ein Kernel-Objekt zeigt und Rechte trägt |
-| VMO | Speicherobjekt (Virtual Memory Object): eine Menge von Seiten, die man einblenden kann |
+| VMO | Speicherobjekt (Virtual Memory Object): Seiten, die man einblenden kann |
 | Kanal | bidirektionale Nachrichtenverbindung, die Bytes und Handles überträgt |
 | Port | Warteschlange, auf der ein Thread auf viele Ereignisse gleichzeitig wartet |
 | Ressource | Handle, das Hardware-Zugriff erlaubt (MMIO, IO-Ports, IRQs, …) |
@@ -128,3 +250,5 @@ gestartet wird. Ein Profil ist eine Textdatei im Boot-Image, die `init` liest.
 | Kit | Gruppe von API-Aufrufen: System-Kit, Treiber-Kit, User-Kit |
 | Treiberpaket | Treiberprozess, Manifest und optional ein Treibermodul (z. B. ein Vulkan-ICD) |
 | Lease | zeitweise exklusive Nutzung eines Geräts, etwa eines Bildschirms; widerrufbar |
+| Ringdatei | Datei fester Größe, die sich selbst überschreibt: die letzten N KiB, immer |
+| rcfs | das Dateisystem von rctos aus der rcp-fs-Familie |

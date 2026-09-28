@@ -1,6 +1,49 @@
-# 06 – Chromium-Portierung
+# 06 – Chromium, der Gast
 
-## Strategie
+## Der Gast
+
+Chromium ist die eine große Ausnahme vom Leitbild ([00](00-vision.md#zwei-welten)): ein
+riesiges Projekt, das die Denkweise der Mikro-Welt nicht teilt, aber das Web mitbringt und
+die Grundlage der Fensterverwaltung ist. Deshalb bekommt es einen klaren Rahmen. **Der
+Gast darf groß sein, aber nicht übergriffig.**
+
+1. **Kontingent statt Anspruch.** Der Gast lebt in einem festen Kontingent aus `main.cfg`
+   (`guest_memory`). Bei Speicherdruck bekommt er das Ereignis und verwirft Tabs; stellt er
+   mehr Speicher an, scheitert die Anforderung, und nur er selbst ist betroffen.
+2. **Der Bildschirm ist geliehen.** Der Gast zeichnet nur, solange er die Lease hält. Endet
+   er oder stürzt er ab, steht die Bodenkonsole wieder da ([05](05-grafik.md#zwei-welten-auf-einem-bildschirm)).
+3. **Keine Systemrechte.** Kein `INSPECT`, keine Anmeldung, keine Treiber, keine
+   Ressourcen. Passwörter der Anmeldung sieht er nie.
+4. **Leise.** Kein Netzverkehr, den der Nutzer nicht auslöst: keine Google-Dienste, keine
+   Telemetrie, keine Absturzberichte nach außen, kein Komponenten-Updater, keine
+   Hintergrund-Synchronisation. Das regeln Build-Argumente, nicht Einstellungen.
+5. **Alles an einem Ort.** Seine Daten liegen in `/usr/<uid>/surf`, sein Paket unter
+   `/app/surf`. Was er mitbringt (musl-libc, Mesa-Treibermodul, ICU, Schriften), gehört
+   zum Paket und wird mit ihm gemessen und ersetzt.
+6. **POSIX nur hier.** Die POSIX-Schicht existiert nur im Gast. Die Mikro-Welt bekommt
+   dadurch keine einzige Zeile Unix-Erbe.
+7. **Ersetzbar.** Ein Update des Gasts ist der Austausch eines Pakets. Die Mikro-Welt hängt
+   an keiner seiner Schnittstellen außer den Protokollen, die sie selbst definiert.
+
+## Schlank einbetten
+
+Chromium besteht grob aus der Content-Schicht (Blink, V8, Netzwerk, GPU, Viz) und dem
+Chrome-Browser darüber (Profile, Synchronisation, Erweiterungen, Einstellungen, Ash). Die
+Empfehlung: **nur die Content-Schicht einbetten**, mit einem eigenen, kleinen Einbetter
+`surf` (der Name kommt von der Browser-App in RCP-OS). Den gleichen Weg gehen Fuchsias
+WebEngine und die Cast-Geräte.
+
+| | Content-Einbettung (`surf`) | Vollständiger Chrome-Browser mit Ash |
+|---|---|---|
+| Umfang | Content-Schicht plus einige tausend Zeilen Einbetter | zusätzlich das gesamte `//chrome` |
+| Fensterverwaltung | eigene, kleine Verwaltung auf Aura: Fenster, Leiste, Fokus | Ash, die Fensterverwaltung von ChromeOS |
+| Browser-Funktionen | Adressleiste, Tabs, Downloads, Berechtigungen: selbst gebaut, schmal | alles vorhanden, auch was niemand braucht |
+| Google-Dienste, Sync, Erweiterungen | gar nicht erst vorhanden | abzuschalten |
+| Portierungsaufwand | geringer | deutlich höher |
+
+Die Entscheidung fällt in M4. Bis dahin ist `content_shell` das Ziel der Portierung.
+
+## Strategie der Portierung
 
 Chromium läuft offiziell schon auf zwei Systemen ohne Unix-Kernel: auf **Windows** und auf
 **Fuchsia**. Fuchsia ähnelt rctos stark: ein Mikrokernel mit Handles, Kanälen, VMOs und
@@ -13,7 +56,7 @@ eine libc mit POSIX-Teilmenge voraus. rctos übernimmt das: **`IS_RCTOS` und `IS
 Überall, wo es um Prozesse, IPC, Speicher oder Ereignisschleifen geht, gibt es dagegen
 eigenen Code.
 
-## libc und POSIX-Schicht
+## libc und POSIX-Schicht, nur für den Gast
 
 - **Grundlage ist musl**, als Port nach rctos. Die Linux-Syscalls von musl werden durch
   System-Kit-Aufrufe und User-Kit-Stubs ersetzt.
@@ -25,8 +68,10 @@ eigenen Code.
 - **Nicht vorhanden:** `fork`, `exec*` (dafür `posix_spawn` über `usr_process_spawn`),
   Signale außer einer Emulation von `raise`/`abort`, Unix-Rechte, `ioctl` außer ein paar
   Terminal-Aufrufen.
-- **Ausgeliefert** wird die libc statisch (`libc.a`) für das Basissystem und als `libc.so`
-  für Prozesse, die Treibermodule laden ([04](04-treibermodell.md#treiberpakete-und-treibermodule)).
+- **Ausgeliefert** wird die libc als Teil des Gast-Pakets: `libc.a` für die statisch
+  gelinkten Prozesse des Gasts und `libc.so` für seinen GPU-Prozess, der Treibermodule lädt
+  ([04](04-treibermodell.md#treiberpakete-und-treibermodule)). Die Mikro-Welt benutzt sie
+  nicht.
 
 ## Plattformcode
 
@@ -59,13 +104,13 @@ eigenen Code.
 
 | Chromium-Prozess | Handles bei Start |
 |---|---|
-| Browser | Namensraum (fs, net, display, input, audio, fonts), `EXEC`, Starter-Recht `process.spawn` |
+| Einbetter (`surf`) | Namensraum der Sitzung (fs, net, display, input, audio, fonts), `EXEC`, Starter-Recht `process.spawn` |
 | GPU | Mojo-Kanal, Kanäle zu `gpu` und `display`, `libc.so` + Treibermodul, `EXEC` für den Shader-JIT von SwiftShader im Rückfall |
 | Renderer | Mojo-Kanal, `EXEC` (V8), sonst nichts |
 | Netzwerk | Mojo-Kanal, Kanal zum Netzdienst |
 | Utility | Mojo-Kanal, je nach Aufgabe |
 
-Der Browser-Prozess startet seine Kinder selbst über `libusr` im eigenen Kontingent. Für
+Der Einbetter startet seine Kinder selbst über `libusr` im eigenen Kontingent. Für
 Geräte mit wenig RAM gibt es `--renderer-process-limit` und den Low-End-Modus von Chromium.
 Für die Inbetriebnahme gibt es `--single-process`, das für den Produktivbetrieb nicht
 geeignet ist.
@@ -79,7 +124,7 @@ Page-Flip, Overlays) und `flatland` (Fuchsia).
 | Ozone-Schnittstelle | Umsetzung |
 |---|---|
 | `OzonePlatform` | Initialisierung, Verbindung zu `display` und `input` |
-| `PlatformWindow` | ein Vollbildfenster pro Anzeige; Ash verwaltet die Fenster innerhalb von Chromium |
+| `PlatformWindow` | ein Vollbildfenster pro Anzeige; die Fenster darin verwaltet der Einbetter (Aura) |
 | `PlatformScreen` | Anzeigen und Modi aus `display.list` |
 | `SurfaceFactoryOzone::CreateCanvasForWidget` | **G0:** Software-Ausgabe, kopiert in den per `map_framebuffer` eingeblendeten Speicher |
 | `SurfaceFactoryOzone::CreateVulkanImplementation` | **G1/G2:** `VulkanImplementationRctos` lädt das Treibermodul, das `gpu.query(MODULE)` liefert |
@@ -96,7 +141,7 @@ Page-Flip, Overlays) und `flatland` (Fuchsia).
   bzw. `aarch64-unknown-rctos`, `--sysroot` auf den musl-Port und libc++ aus dem
   Chromium-Baum. Clang akzeptiert unbekannte OS-Namen im Triple, eine Anpassung an LLVM ist
   nicht nötig.
-- **Rust:** rctos selbst enthält kein Rust ([00](00-vision.md#getroffene-entscheidungen)).
+- **Rust:** rctos selbst enthält kein Rust ([00](00-vision.md#entscheidungen)).
   Neuere Chromium-Versionen bringen aber eigene Rust-Komponenten mit, die `std` verwenden.
   Das ist ein **erkanntes Risiko**. Möglichkeiten, in dieser Reihenfolge der Präferenz:
   1. die betroffenen Komponenten per GN-Argument abschalten bzw. durch C++-Alternativen
@@ -108,7 +153,11 @@ Page-Flip, Overlays) und `flatland` (Fuchsia).
 
   Entschieden wird in M4, nachdem geprüft wurde, welche Komponenten zu diesem Zeitpunkt
   zwingend sind.
-- **Ziel für den Anfang** ist `content_shell`, erst danach der vollständige Browser mit Ash.
+- **Ziel für den Anfang** ist `content_shell`, danach der Einbetter `surf`
+  ([Schlank einbetten](#schlank-einbetten)).
+- **Build-Argumente** für einen leisen Gast (ohne Google-Dienste, Telemetrie,
+  Absturzberichte, Komponenten-Updater) stehen gesammelt in `ports/chromium/args.gn`.
+  Jede Abweichung davon ist eine dokumentierte Entscheidung.
 
 ## Pflege
 
@@ -129,8 +178,10 @@ Page-Flip, Overlays) und `flatland` (Fuchsia).
 | Mojo und Prozessstart | mittel | gering (Fuchsia-Vorlage) |
 | Ozone G0 | gering | gering |
 | Ozone G1/G2 und Vulkan-Erweiterungen | hoch | mittel |
+| Einbetter `surf` (Fensterverwaltung, Adressleiste, Tabs, Downloads) | mittel | gering |
 | Build-System und Toolchain | mittel | **hoch (Chromiums Rust-Komponenten)** |
 | laufende Pflege | dauerhaft | hoch, wenn die Patches ausufern |
 
 Die Chromium-Portierung ist mit Abstand der größte Einzelposten des Projekts. Kernel und
-Treiber sind dagegen überschaubar.
+Treiber sind dagegen überschaubar, und das soll so bleiben: Der Gast rechtfertigt keine
+Schicht in der Mikro-Welt, die es ohne ihn nicht gäbe.

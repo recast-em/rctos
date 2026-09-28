@@ -22,6 +22,12 @@ Eine Unterscheidung wie „privilegiertes Treiber-Kit“ gibt es nicht. Die Aufr
 alle da, aber ohne das passende Ressourcen-Handle schlagen sie mit
 `RC_ERR_ACCESS_DENIED` fehl. Die Rechte liegen also im Handle, nicht im Prozesstyp.
 
+**Die Kits sind alles, was ein Programm der Mikro-Welt braucht.** Eine libc gibt es dort
+nicht. `libsys` enthält dafür die paar Hilfen, die jedes Programm braucht: `mem*`,
+`str*`, eine kleine formatierte Ausgabe (`rc_fmt`, dieselbe wie im Kernel) und das Lesen
+der Zeitseite. POSIX ist eine Bibliothek über dem User-Kit, und die bekommt nur der Gast
+([06](06-chromium.md#libc-und-posix-schicht-nur-für-den-gast)).
+
 ## Binärschnittstelle
 
 | | x86-64 | AArch64 |
@@ -168,8 +174,15 @@ typedef struct {
 | 0x051 | `sys_system_info(uint32_t topic, void *buf, size_t len)` – ABI-Stand, CPUs, Seitengröße, Speicherstatistik |
 | 0x052 | `sys_log_write(rc_handle_t log, const void *buf, size_t len)` |
 | 0x053 | `sys_log_read(rc_handle_t log, void *buf, size_t len, size_t *actual)` |
+| 0x054 | `sys_inspect(rc_handle_t inspect_res, uint32_t table, uint32_t index, void *rec, size_t len)` – ein Datensatz fester Größe je Index |
 
-Das System-Kit hat **51 Aufrufe**.
+Das System-Kit hat **52 Aufrufe**.
+
+`sys_inspect` ist die Auskunft des Kernels ([01](01-kernel.md#auskunft)). Tabellen:
+`RC_TAB_PROCESSES`, `RC_TAB_THREADS` (mit der Prozess-ID im oberen Teil von `index`),
+`RC_TAB_MEMORY`, `RC_TAB_CPUS`, `RC_TAB_BUDGET`. Hinter dem letzten Datensatz kommt
+`RC_ERR_OUT_OF_RANGE`. Die Datensätze stehen in `kits/sys/rc/inspect.h`, und aus ihnen
+entstehen die Tabellen unter `/now`.
 
 ## Treiber-Kit (0x100–0x17F)
 
@@ -212,8 +225,11 @@ den Namensraum.
 | GPU | `usr_gpu_open`, `usr_gpu_query`, … (für Treibermodule, [05](05-grafik.md)) | GPU-Treiber |
 | Audio | später | Audiodienst |
 
-Die POSIX-Schicht der libc ([06](06-chromium.md)) baut auf dem User-Kit auf. Das User-Kit
-selbst hängt von keiner libc ab.
+Die Tabellen unter `/now` liest man mit den gewöhnlichen Dateiaufrufen, einen eigenen
+Aufruf dafür gibt es nicht.
+
+Die POSIX-Schicht der libc ([06](06-chromium.md)) baut auf dem User-Kit auf und ist dem
+Gast vorbehalten. Das User-Kit selbst hängt von keiner libc ab.
 
 ## Stabilitätsregeln („keine DLL-Hölle“)
 
