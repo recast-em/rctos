@@ -1,0 +1,9 @@
+# Limine, festgelegte Version. Neue Version: Tag ändern, Prüfsummen neu erzeugen mit
+#   (cd build/limine && sha256sum BOOTX64.EFI limine-bios.sys limine-bios-cd.bin limine-uefi-cd.bin limine.c limine-bios-hdd.h)
+# tag: v11.4.1-binary
+333f7a69379b1f47e019be215885cdc078b9edd6e9255cbe2f706d6c5ec0ef06  BOOTX64.EFI
+13108feb6399758085ec09de073da5fc74d6b3b7d0df4034e307a28ec37b82a2  limine-bios.sys
+18f7823c631e92797e00c320395ed4151e9dcd36ca4c69c51de8da6a473bb3b2  limine-bios-cd.bin
+0c7a1daf60d2140d124bf020ea99fff95788963afc55ed9acdb9bbfe603a7b20  limine-uefi-cd.bin
+d448f0f1a3138c12858232b901a06e1d35e3223a7ee458af999217a916bde92e  limine.c
+ddaa1af5a644b438634b8c83c056f12022903d67623807fd318048cf41d92927  limine-bios-hdd.h

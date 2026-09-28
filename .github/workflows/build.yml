@@ -1,0 +1,36 @@
+# Bauen, Budget prüfen, in QEMU booten (UEFI und BIOS) - bei jedem Push.
+name: build
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  x86_64:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Werkzeuge
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends clang lld qemu-system-x86 ovmf xorriso
+
+      - name: Kernel und Budget
+        run: make
+
+      - name: Boot-Image
+        run: make iso
+
+      - name: In QEMU booten (UEFI und BIOS)
+        run: make test
+
+      - name: Ergebnisse
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rctos-x86_64
+          path: |
+            build/rctos-x86_64.iso
+            build/screen-*.png
+            build/serial-*.log

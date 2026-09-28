@@ -57,6 +57,7 @@ die Wurzel. Jeder Knoten kann mit `drv_resource_create` Teilbereiche abspalten, 
 | `EXEC` | – | `sys_vmo_make_executable` (JIT) |
 | `SMC` | Funktionsnummern-Bereich (AArch64) | `drv_smc_call` |
 | `POWER` | – | `drv_system_power` |
+| `INSPECT` | – | `sys_inspect`: Auskunft über alle Prozesse, Speicher, CPUs und Budgets |
 
 Beispiel für die Verteilung beim Boot:
 
@@ -66,11 +67,14 @@ ROOT (init)
  │     ├─ MMIO BAR0+BAR2 der iGPU, IRQ 1 MSI, IOMMU 00:02.0 ─► intel-igpu
  │     ├─ IOPORT 0x3F8–0x3FF, IRQ 4                            ─► uart16550
  │     └─ MMIO ECAM, IRQ MSI-Pool                               ─► pci
- ├─ EXEC  ─► Starter (vergibt es an Prozesse mit Berechtigung „jit“)
- └─ POWER ─► Energiedienst
+ ├─ EXEC    ─► Starter (vergibt es an Prozesse mit Berechtigung „jit“)
+ ├─ POWER   ─► Energiedienst
+ └─ INSPECT ─► bleibt bei init, für die Tabellen unter /now
 ```
 
-`init` behält nach dem Verteilen keine Hardware-Rechte.
+`init` behält nach dem Verteilen keine Hardware-Rechte, nur `INSPECT`. Auskunft ist ein
+Recht wie jedes andere: Wer nicht `init` ist, sieht den Systemzustand über `/now`, und
+dort entscheidet die Sitzung, was lesbar ist ([09](09-mikro-welt.md#now--der-zustand-als-tabellen)).
 
 ## Manifeste und Berechtigungen
 
@@ -80,24 +84,27 @@ die die **Systemrichtlinie** des Profils erlaubt. Was nicht im Manifest steht, b
 Prozess nicht.
 
 ```ini
-# /pkg/chromium/manifest
-name        = chromium
-binary      = bin/chromium
-priority    = 12
-max_priority= 20
-memory      = 3G            # Kontingent
-handles     = 65536
-
-[use]
-service     = fs, net, display, input, gpu, audio, fonts
-permission  = jit, display.lease, input.focus, process.spawn
+; /app/surf/manifest - der Gast (Chromium-Einbettung)
+name         = surf
+binary       = bin/surf
+priority     = 12
+max_priority = 20
+memory       = guest         ; Kontingent aus main.cfg (guest_memory)
+handles      = 65536
+service      = fs net display input gpu audio fonts
+permission   = jit display.fullscreen process.spawn
 ```
+
+Manifeste haben dasselbe Format wie `main.cfg` ([09](09-mikro-welt.md#maincfg)): eine Zeile
+pro Schlüssel, Kommentare mit `;`, dieselbe Ganz-Datei-Regel. Ein Manifest mit unbekanntem
+Schlüssel startet nicht.
 
 | Berechtigung | Wirkung |
 |---|---|
 | `jit` | Prozess bekommt ein `EXEC`-Ressourcen-Handle |
 | `process.spawn` | Prozess darf Kindprozesse anlegen (Kontingent wird geteilt) |
-| `display.lease` | Prozess darf eine Anzeige exklusiv übernehmen |
+| `display.lease` | Prozess hält die Anzeige; im Normalbetrieb nur `win` ([11](11-fenster.md)) |
+| `display.fullscreen` | Prozess darf die ganze Anzeige für sich verlangen (Vollbild); `win` gibt die Lease ab und wartet |
 | `framebuffer.map` | Prozess darf den Framebuffer der Lease direkt einblenden |
 | `input.focus` / `input.grab` | Eingaben empfangen bzw. exklusiv erhalten |
 | `ioport:<von>-<bis>` | direkter IO-Port-Zugriff (nur x86-64, nur für Treiber und Diagnose) |
@@ -105,6 +112,36 @@ permission  = jit, display.lease, input.focus, process.spawn
 
 Treiber brauchen keine eigenen Berechtigungen dieser Art. Ihre Ressourcen bekommen sie vom
 `devmgr` anhand des Treiber-Manifests ([04](04-treibermodell.md)).
+
+## Identität und Sitzungen
+
+Der Kernel kennt keine Benutzer, nur Handles. Identität entsteht dort, wo sie gebraucht
+wird: im Dateidienst und in der Anmeldung. Das Modell ist das der Familie (rcp-fs in
+RCP-OS), damit Volumes und Gewohnheiten zwischen beiden Systemen passen.
+
+| uid | Bedeutung |
+|---|---|
+| `0x00` | Admin (root) |
+| `0x01` | Kernel und Mikro-Welt |
+| `0x02`–`0x07` | Dienste mit eigener Identität: `0x02` Anmeldung, `0x03` Konsole, weitere nach Bedarf |
+| `0x08`–`0xFE` | Konten der Nutzer |
+| `0xFF` | öffentlich bzw. anonym |
+
+- **Sitzung = Kanal mit Stempel.** Meldet sich jemand an, öffnet `login` für die neue
+  Sitzung eine Verbindung zum Dateidienst, die mit der uid gestempelt ist. Alle Programme
+  der Sitzung erben diese Verbindung über ihren Namensraum. Der Dateidienst prüft jeden
+  Zugriff gegen den Stempel; eine uid im Kernel braucht es dafür nicht.
+- **Heimat ist `/usr/<uid>`** (dezimal, ohne führende Nullen). Umbenennen eines Kontos
+  ändert nur den Eintrag in `/sys/users`, nichts im Dateisystem.
+- **Schreibmatrix** wie in rcp-fs: Einträge von root schreibt nur die Admin-Sitzung, Einträge
+  eines Dienstes nur dieser Dienst und root, Einträge eines Nutzers nur er selbst und root,
+  öffentliche Einträge jede Sitzung. `PRIVATE` schützt auch das Lesen. Die anonyme Sitzung
+  (`0xFF`) schreibt nichts auf das System-Volume, nur nach `/tmp`.
+- **Stempel beim Anlegen:** Neue Einträge tragen die uid der Sitzung. Ein `chown` gibt es
+  nicht.
+- **Vertrauenswürdiger Pfad:** Anmeldung und Sperre zeichnet `login` in der Mikro-Welt, als
+  Vollbild-Oberfläche. Das Passwort geht nie durch den Gast
+  ([09](09-mikro-welt.md#systemoberflächen-vollbild-statt-popup)).
 
 ## Direktzugriff
 
@@ -161,7 +198,7 @@ Strg+Alt+Entf.
   kommen SMEP und SMAP (x86-64) bzw. PXN und PAN (AArch64, soweit vorhanden).
 - **SYSRET-Falle (x86-64).** Vor `sysret` prüft der Kernel, ob die Rücksprungadresse
   kanonisch ist. Ist sie es nicht, kehrt er über `iret` zurück.
-- **Chromium-Sandbox.** Ein Renderer bekommt nur seinen Mojo-Kanal zum Browser-Prozess,
+- **Chromium-Sandbox.** Ein Renderer bekommt nur seinen Mojo-Kanal zum Einbetter,
   eine `EXEC`-Ressource für V8 und sein Kontingent. Er hat keinen Namensraum, keinen
   Dateizugriff und kein Netz. Auf rctos ist das kein Filter über einem mächtigen System
   wie seccomp auf Linux, sondern die schlichte Abwesenheit von Handles.

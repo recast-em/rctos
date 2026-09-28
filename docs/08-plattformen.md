@@ -14,7 +14,7 @@ hinter einer schmalen Schnittstelle. Der übrige Kernel sieht keine Architekturd
 | Kontextwechsel, FPU/SIMD | XSAVE/XRSTOR, Größe laut CPUID | `q0`–`q31`, FPSR/FPCR (später SVE) |
 | Thread-lokaler Speicher | FS-Basis (`sys_thread_set_tls` bzw. `wrfsbase`) | `TPIDR_EL0` |
 | Interrupt-Controller | x2APIC/xAPIC, IOAPIC | GICv2 / GICv3 |
-| Timer | LAPIC TSC-Deadline; Kalibrierung über HPET bzw. ACPI-PM-Timer | Generic Timer (`CNTV_*`) |
+| Timer | Local APIC im Einmal-Modus (M0), TSC-Deadline wo vorhanden; kalibriert gegen die TSC-Frequenz, die der Bootloader meldet | Generic Timer (`CNTV_*`) |
 | Weitere CPUs starten | Limine-SMP (INIT-SIPI-SIPI) | Limine-SMP bzw. PSCI `CPU_ON` |
 | IOMMU | Intel VT-d (DMAR), AMD-Vi | SMMUv2/v3 |
 | Cache-Pflege für DMA | nicht nötig (kohärent) | bei nicht-kohärenten Geräten nötig (`drv_cache_op`) |
@@ -28,10 +28,21 @@ rctos nutzt das **Limine-Boot-Protokoll** auf beiden Architekturen. Limine ist e
 BSD-lizenzierter Bootloader für UEFI und, auf x86-64, auch für BIOS. Er liefert:
 
 - Speicherkarte und Direct-Map des Speichers (HHDM)
-- Framebuffer aus GOP
+- Framebuffer aus GOP bzw. VBE
 - RSDP (ACPI) bzw. DTB
-- Modul-Dateien, darunter das Boot-Image mit `init`, `devmgr`, Treibern und Profil
+- Modul-Dateien, darunter das Boot-Image mit `init`, `devmgr`, Treibern und `main.cfg`
 - SMP-Information und Start der weiteren CPUs
+- TSC-Frequenz, Uhrzeit beim Boot (aus der RTC) und die Zeit im Bootloader
+
+**Festgelegt:** Limine 11.4.1 mit Protokoll-Basisrevision 6. Tag und Prüfsummen aller
+Dateien, die ins Boot-Image gehen, stehen in `boot/limine.sha256`; `tools/fetch-limine.sh`
+holt und prüft sie. Das Boot-Image ist ein hybrides ISO für UEFI und BIOS, das auch auf
+einen USB-Stick geschrieben werden kann.
+
+Seit Basisrevision 3 bildet die Direct-Map nur noch RAM, Bootloader-Daten, Kernel, Module,
+Framebuffer und (ab Revision 4) ACPI ab. MMIO wie den Local APIC trägt der Kernel selbst
+ein (`arch_map_mmio`, ungecacht). Weitere CPUs übergibt Limine schlafend, und M0 legt sie
+mit `hlt` schlafen, statt sie warten zu lassen.
 
 Damit braucht rctos keinen eigenen Bootloader. Für Boards ohne UEFI, etwa den Raspberry Pi
 ohne Community-UEFI, kommt später ein kleiner eigener Boot-Stub dazu. Er nimmt das DTB in
@@ -79,6 +90,15 @@ Gesucht sind je ein häufiges Gerät pro Grafikgeneration, zum Beispiel:
 
 Die konkrete Auswahl richtet sich danach, was die Zielgruppe tatsächlich übrig hat, und wird
 in `docs/hardware.md` gepflegt.
+
+### Die Referenzmaschine in QEMU
+
+`tools/qemu.py` startet immer dieselbe Maschine, damit Messwerte vergleichbar bleiben:
+`q35`, `-cpu max` (mit KVM `-cpu host`), 4 CPUs, 1 GiB RAM, UEFI über OVMF oder mit
+`--bios` SeaBIOS. Mit `--rtc family` wacht sie wie jedes Gerät der Familie am 9. Oktober
+2026 um 10:10 UTC auf; so bleiben Bildschirmfotos und Logs zwischen zwei Läufen
+vergleichbar. Ohne KVM (in der CI) läuft QEMU in der Emulation; die Bootzeiten sind dann
+Obergrenzen.
 
 ## AArch64
 

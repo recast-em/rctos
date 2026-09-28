@@ -3,14 +3,18 @@
 ## Überblick
 
 ```
-┌──────────────────────────── Chromium ────────────────────────────┐
-│ Browser-Prozess: Ash/Fensterverwaltung, Eingabe über Ozone        │
-│ GPU-Prozess:     Viz → Skia (Vulkan) → ANGLE (WebGL über Vulkan)  │
-│                  Ozone-Plattform „rctos“                         │
-│                  Treibermodul: Mesa-Vulkan-ICD (z. B. anv)        │
-└───────┬───────────────────────────────────────┬──────────────────┘
-        │ gpu-Protokoll                          │ display-Protokoll
-┌───────▼───────────────────────────────────────▼──────────────────┐
+┌───────────── Gast: Chromium (surf) ─────────────┐  ┌──── Programme der Mikro-Welt ────┐
+│ Ozone „rctos“: jedes Chromium-Fenster ist ein    │  │ Zellen, Leinwand, Fläche          │
+│ natives Fenster; Viz → Skia/ANGLE (Vulkan)       │  │ (Terminal, TUI, Dateimanager, …)  │
+│ Treibermodul: Mesa-Vulkan-ICD (z. B. anv)        │  └───────────────┬──────────────────┘
+└───────┬────────────────────────┬────────────────┘                  │ Zellebenen, Schaden
+        │ gpu-Protokoll           │ Frames + Schaden                  │
+        │                  ┌──────▼──────────────────────────────────▼──────┐
+        │                  │ win: Fensterschicht, Zellen-Compositor           │
+        │                  │ shell: Leiste, Status-Kachel, Fensterpolitik     │
+        │                  └──────┬───────────────────────────────────────────┘
+        │                         │ display-Protokoll (Lease, present, VBlank)
+┌───────▼─────────────────────────▼────────────────────────────────┐
 │ intel-igpu (Treiberprozess)                                       │
 │  GPU-Teil: GGTT/PPGTT, Execlists, Kontexte, Fences                │
 │  Anzeige-Teil: Planes, Page-Flip, VBlank, später Modesetting      │
@@ -21,13 +25,35 @@
 
 Die Grundsätze:
 
-- **Es gibt keinen Fenster-Server und keinen Compositor-Prozess.** Chromium setzt das Bild
-  selbst zusammen und übergibt ganze Frames an die Anzeige.
+- **Die Oberfläche gehört der Mikro-Welt.** Die Fensterschicht `win` hält die Lease auf die
+  Anzeige und setzt alles aus Zellen zusammen ([11](11-fenster.md)). Chromium ist eine
+  Render-Instanz in Fenstern, kein Fenster-Server.
+- **Kein Frame-Takt.** Gezeichnet wird nur nach Schaden; ein ruhender Bildschirm kostet
+  nichts.
+- **Vollbild auf Wunsch:** Ein Programm mit `display.fullscreen` bekommt die Lease direkt
+  und präsentiert seine Puffer selbst; `win` wartet so lange.
 - **Ein Treiber, zwei Protokolle.** Render-Engine und Display-Engine der iGPU liegen am
   selben PCI-Gerät, also bietet ein Treiberprozess beide Klassen an. Bei getrennter Hardware,
   etwa einem ARM-SoC mit eigenem Display-Controller, sind es zwei Treiber.
 - **Nur Vulkan.** Chromium nutzt Vulkan für Skia und ANGLE-auf-Vulkan für WebGL, genau wie
   auf Fuchsia. Einen OpenGL-Treiber wie Mesa `iris` braucht es nicht.
+
+## Wer zeichnet was
+
+| Wer | Wie | Wann |
+|---|---|---|
+| Kernel | Boot-Konsole direkt in den Firmware-Framebuffer (Zellen 8 × 8, CP437) | beim Boot und bei einer Panik |
+| `win` | Zellen, Leinwand, Flächen und GPU-Puffer der Fenster, nur beschädigte Zellen, Page-Flip bei VBlank | immer, sobald die Mikro-Welt läuft |
+| Programme der Mikro-Welt | ihre Zellebenen und Leinwände; `win` liest sie | wenn sich ihr Inhalt ändert |
+| Gast | Vulkan-Frames in seine Fenster; im Vollbild direkt über `present` | solange seine Fenster sichtbar sind bzw. er die Lease hält |
+| `login` | Vollbild-Oberfläche aus Zellen | Anmeldung, Sperre, sichere Tastenkombination |
+
+- **Die Lease ist ein Handle, kein Zustand im Treiber.** Endet ein Vollbild-Programm oder
+  stürzt es ab, verfällt die Lease, und `win` zeichnet wieder.
+- **Die sichere Tastenkombination** lässt der Eingabedienst nie an ein Programm durch. Sie
+  widerruft jede Vollbild-Lease und bringt `login`.
+- **Die Zellenkonsole ist ein C-Modul** (`con.c`), das Kernel und `win` gemeinsam benutzen:
+  dieselbe Schrift, dieselbe Palette, dieselben Regeln.
 
 ## Grafikpuffer
 
@@ -199,20 +225,20 @@ bauen aufeinander auf:
 
 | Stufe | Pfad | Voraussetzung |
 |---|---|---|
-| **G0** | Software: Skia rendert auf der CPU, Ozone kopiert in den Framebuffer (`map_framebuffer`) | nur `efifb` |
-| **G1** | Vulkan mit Swapchain: Skia/Viz rendern per Vulkan, Präsentation über `VK_RCTOS_surface` (Mesa-WSI) | GPU-Treiber, Treibermodul, D0 oder D1 |
-| **G2** | Zero-Copy: Chromium verwaltet Grafikpuffer selbst (`NativePixmap`), präsentiert direkt über `present` und nutzt Overlays | D1 bzw. D3, externe Speicher-Erweiterung |
+| **G0** | Software: Skia rendert auf der CPU in eine Fläche seines Fensters; `win` kopiert die Schadenszellen | nur `efifb` |
+| **G1** | Vulkan mit Swapchain: Skia/Viz rendern per Vulkan in Grafikpuffer ihres Fensters (`VK_RCTOS_surface`, Mesa-WSI); `win` setzt sie zusammen | GPU-Treiber, Treibermodul, D0 oder D1 |
+| **G2** | Zero-Copy: Web-Fenster setzt die GPU zusammen; im Vollbild legt der Anzeige-Treiber Chromiums Puffer direkt auf den Bildschirm (Overlays, direct scanout) | D1 bzw. D3, externe Speicher-Erweiterung |
 
 In QEMU wird G1 ohne echte Hardware mit **`virtio-gpu` und Venus** erprobt. Venus reicht
 Vulkan-Aufrufe an den Host weiter, der Gast braucht dazu nur `venus` als Treibermodul.
 
 ## Rückfall und Robustheit
 
-- **Kein GPU-Treiber:** Anzeige über `efifb`, Chromium mit SwiftShader oder Software-Compositing.
+- **Kein GPU-Treiber:** Anzeige über `efifb`, `win` setzt auf der CPU zusammen, Chromium rendert mit SwiftShader oder in Software.
 - **GPU-Absturz:** Der Treiber setzt die Engine zurück und meldet `context_lost`. Chromium
   kann seinen GPU-Prozess neu aufbauen, dafür hat es bereits Mechanismen.
 - **Treiber-Absturz:** `devmgr` startet ihn neu. Die Anzeige bleibt dabei stehen, weil die
-  Display-Engine das letzte Bild weiter zeigt, und Chromium verbindet sich neu.
+  Display-Engine das letzte Bild weiter zeigt; `win` und Chromium verbinden sich neu.
 
 ## Ausblick ARM
 

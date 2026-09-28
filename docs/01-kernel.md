@@ -13,7 +13,8 @@ Der Kernel übernimmt nur das, was nur privilegierter Code tun kann:
 | Weiterleitung von Interrupts an Treiber | Programmlader (ELF), außer für `init` |
 | Zeit und Timer | Namensdienst, Richtlinien, Benutzerverwaltung |
 | Zufallszahlen (CSPRNG) | Grafik, Eingabe, Audio |
-| frühe Diagnoseausgabe (serielle Schnittstelle) | Protokollierung (Log-Dienst) |
+| Auskunft über den eigenen Zustand (`sys_inspect`) | Aufbereitung als Tabellen unter `/now` |
+| frühe Diagnoseausgabe, Boot-Bericht, Panik (serielle Schnittstelle und Bildschirm) | Protokollierung (Ringdateien unter `/log`) |
 
 ## Objektmodell
 
@@ -32,7 +33,7 @@ Objekte ausschließlich über **Handles**, und jedes Handle trägt eine Bitmaske
 | `EventPair` | Signalobjekt-Paar; jede Seite signalisiert der anderen |
 | `Port` | Warteschlange für Ereignispakete |
 | `Timer` | Einmal-Timer, signalisiert bei Ablauf |
-| `Resource` | Hardware-Berechtigung (MMIO-, IO-Port- oder IRQ-Bereich, JIT, IOMMU, Energie, SMC) |
+| `Resource` | Berechtigung für Hardware und Sonderrechte (MMIO-, IO-Port- oder IRQ-Bereich, JIT, IOMMU, Energie, SMC, Auskunft) |
 | `Interrupt` | an einen Treiber gebundene Unterbrechung |
 | `Msi` | Block von MSI/MSI-X-Vektoren |
 | `Bti` | DMA-Identität eines Geräts |
@@ -62,17 +63,26 @@ Treiber.
 
 - **Allgemeine Seiten (4 KiB):** Freie Seiten bilden eine verkettete Liste *in sich selbst*.
   Der Zeiger auf die nächste Seite steht in der freien Seite, die über die Direct-Map
-  erreichbar ist. Dadurch gibt es keine Metadaten pro Seite, und der Verwaltungsaufwand
-  bleibt unabhängig von der RAM-Größe. Jede CPU hat einen kleinen Zwischenspeicher (etwa
-  32 Seiten), damit sie nicht ständig um die globale Liste konkurriert.
+  erreichbar ist. Noch nie benutzte Seiten schneidet der Verwalter von oben von den freien
+  Bereichen der Speicherkarte ab. Dadurch gibt es keine Metadaten pro Seite, der Aufwand ist
+  unabhängig von der RAM-Größe, und beim Start wird der RAM nicht angefasst (umgesetzt in
+  `pmm.c`). Später bekommt jede CPU einen kleinen Zwischenspeicher (etwa 32 Seiten), damit
+  sie nicht ständig um die globale Liste konkurriert.
 - **Zusammenhängender Pool:** Für DMA-Puffer ohne IOMMU und für Ringpuffer reserviert der
   Kernel beim Boot einen Pool. Die Größe steht in der Boot-Konfiguration; Vorgabe sind
   4 MiB im Profil `minimal` und 64 MiB im Profil `desktop`. Nur dieser Pool hat eine Bitmap.
 - **Seitenbesitz:** Eine Seite gehört genau einem VMO. Deshalb braucht es keine
   Referenzzähler pro Seite. Geteilt werden VMOs, nicht Seiten. Copy-on-Write-Klone gibt es
   in Version 1 nicht.
-- **Direct-Map:** Der gesamte physische Speicher ist im Kernel-Adressraum eingeblendet, mit
-  1-GiB-Seiten bzw. 2-MiB-Seiten als Rückfall.
+- **Direct-Map:** RAM, Firmware-Daten und Framebuffer sind im Kernel-Adressraum
+  eingeblendet, an derselben Stelle wie beim Bootloader, damit dessen Zeiger gültig bleiben.
+  Aneinander grenzende Bereiche gleicher Art werden zusammengefasst und mit 1-GiB-,
+  2-MiB- oder 4-KiB-Seiten abgebildet, je nachdem, was passt. RAM ist write-back, der
+  Framebuffer write-combining, MMIO ungecacht (PAT wie bei Limine). Lücken wie der
+  VGA-Bereich unter 1 MiB bleiben unabgebildet. Die Seitentabellen dafür kosten auf der
+  UEFI-Referenzmaschine 48 KiB (eigener Budgetposten).
+- **Kernel mit W^X:** Code `r-x`, Konstanten `r--`, Daten und bss `rw-`; ein Selbsttest beim
+  Boot prüft die Rechte in den Tabellen.
 
 ### Virtueller Speicher
 
@@ -82,8 +92,13 @@ Treiber.
   Seitentabellen oder Seiten zu belegen. Chromium braucht das dringend: V8 reserviert
   unter Umständen bis zu 1 TiB für seine Sandbox, PartitionAlloc reserviert
   Gigabyte-große Pools. Reservierungen kosten deshalb nur ein Kernel-Objekt.
-- **Verzögerte Belegung:** Seiten normaler VMOs werden erst beim ersten Zugriff belegt und
-  genullt.
+- **Sofort verbuchen, später belegen (kein Overcommit):** Ein VMO wird beim Anlegen und bei
+  `sys_vmo_set_size` in voller Größe dem Kontingent und dem Gesamtbestand angerechnet. Die
+  Seiten holt und nullt der Kernel erst beim ersten Zugriff. Ein Zugriff kann deshalb nie
+  an fehlendem Speicher scheitern: Fehlt Speicher, scheitert das Anlegen mit
+  `RC_ERR_NO_MEMORY` oder `RC_ERR_QUOTA`, sichtbar und genau dort, wo es verursacht wurde.
+  Einen OOM-Killer gibt es nicht. Reservierungen (`sys_vm_reserve`) werden nicht verbucht.
+  Chromium kennt dieses Modell von Windows, das ebenfalls ohne Overcommit arbeitet.
 - **W^X:** Eine Einblendung ist nie gleichzeitig beschreibbar und ausführbar. Ausführbar
   werden kann nur ein VMO mit dem Recht `EXECUTE`. Dieses Recht erzeugt
   `sys_vmo_make_executable` nur mit einer `Resource` der Art `EXEC` ([03](03-rechte.md)).
@@ -100,6 +115,22 @@ erzeugt, werden ihm angerechnet. Kontingente sind hierarchisch, denn ein Kind be
 einen Teil des Kontingents seines Elternprozesses. So kann kein Prozess den Kernel
 aushungern, und die Budgets lassen sich durchsetzen.
 
+Kontingente sind Obergrenzen, keine Reservierungen; ihre Summe darf den RAM übersteigen.
+Entscheidend ist die Verbuchung beim Anlegen.
+
+### Speicherdruck und Auslagern
+
+- **Speicherdruck ist ein Ereignis.** Der Kernel führt zwei Schwellen für den unverbuchten
+  Speicher (Vorgabe 10 % und 3 %). Wird eine Schwelle unterschritten, signalisiert er ein
+  `Event` mit `PRESSURE_WARN` bzw. `PRESSURE_CRITICAL`. Das Event bekommt nur `init`; es
+  reicht das Signal an Programme mit der Berechtigung weiter, vor allem an den Gast, der
+  dann Tabs verwirft (Chromium hat dafür den `MemoryPressureListener`).
+- **Auslagern ist ein bewusster Schritt**, nie ein Automatismus: Ein Programm, das ein
+  `suspend` bekommt, gibt seine Registrierungen frei und wird vom Starter als Abbild in die
+  Datei `swap` geschrieben. Beim `resume` kommt es zurück. Das ist das „sequenzielle
+  Multitasking“ von RCP-OS. Der Kernel selbst lagert nie aus und kennt keine
+  Seitenfehler-getriebene Auslagerung.
+
 ## Threads und Scheduler
 
 - **Präemptiv**, mit **32 festen Prioritäten** und Round-Robin innerhalb einer Stufe:
@@ -115,7 +146,12 @@ aushungern, und die Budgets lassen sich durchsetzen.
 - **Pro CPU eine Run-Queue** mit einer 32-Bit-Belegungsmaske. Die Auswahl des nächsten
   Threads kostet O(1).
 - **Zeitscheibe** 4 ms (konfigurierbar). **Tickless:** Der Timer wird nur für den nächsten
-  tatsächlichen Termin programmiert (TSC-Deadline auf x86-64, Generic Timer auf AArch64).
+  tatsächlichen Termin programmiert: auf x86-64 im TSC-Deadline-Modus, wo vorhanden, sonst
+  mit dem Local APIC im Einmal-Modus (so arbeitet M0); auf AArch64 mit dem Generic Timer.
+- **Der Kernel hat keine eigenen Threads.** Er arbeitet nur im Auftrag eines Syscalls oder
+  eines Interrupts. Pro CPU gibt es einen Leerlauf, der die CPU anhält (`hlt` bzw. `wfi`).
+  Ein untätiges System weckt keine CPU; M0 wacht einmal pro Minute auf, und nur, weil sich
+  die angezeigte Uhr ändert.
 - **SMP:** Ein Thread läuft bevorzugt auf der CPU, auf der er zuletzt lief. Beim Aufwecken
   darf er auf eine untätige CPU wandern. Es gibt keinen periodischen Lastausgleich.
 - **Kernel-Präemption:** Der Kernel ist nicht präemptiv, aber jeder Pfad ist kurz. Lange
@@ -157,6 +193,29 @@ Die Aufrufe `sys_futex_wait` und `sys_futex_wake` arbeiten auf einem 32-Bit-Wort
 Adressraum. Mutexe, Condition Variables und `pthread_*` baut die libc darauf auf, ohne
 eigenes Kernel-Objekt.
 
+## Auskunft
+
+Der Kernel gibt über alles Auskunft, was er verwaltet, aber er bereitet nichts auf.
+
+- `sys_inspect(inspect, table, index, rec, len)` liefert **einen Datensatz fester Größe je
+  Index**: Prozesse, Threads eines Prozesses, Speicherbestände, CPUs, Budgets, Ringe. Wer
+  eine Tabelle will, zählt die Indizes hoch, bis `RC_ERR_OUT_OF_RANGE` kommt; der Kernel
+  kopiert nie Listen (wie `SYS_TASK_INFO` in RCP-OS).
+- Die Layouts der Datensätze stehen in einem Header mit `_Static_assert`, den Kernel,
+  `init` und Werkzeuge gemeinsam benutzen.
+- Aufrufen darf das nur, wer die Ressource `INSPECT` hat; `init` macht daraus die Tabellen
+  unter `/now` ([09](09-mikro-welt.md#now--der-zustand-als-tabellen)).
+
+## Fehler als Exponate
+
+- **Ausnahme in einem Prozess:** Der Prozess geht in den Zustand `FAULTED`. Der Kernel hält
+  den Ausnahmedatensatz fest (Vektor, Fehlercode, Adresse, alle Register) und signalisiert
+  `TERMINATED`. Der Datensatz bleibt über `sys_object_info(RC_INFO_FAULT)` und
+  `sys_inspect` lesbar, bis das letzte Handle auf den Prozess geschlossen ist. Ein späterer
+  Debugger setzt genau hier an.
+- **Kernel-Panik:** Ursache und alle Register erscheinen auf dem Bildschirm und auf der
+  seriellen Schnittstelle, dann hält der Kernel an (seit M0 umgesetzt und getestet).
+
 ## Interrupts
 
 - Der Kernel besitzt nur den Interrupt-Controller (LAPIC/IOAPIC bzw. GIC), den Timer und
@@ -179,6 +238,8 @@ eigenes Kernel-Objekt.
   Die Zeitseite enthält nur Daten und keinen Code, anders als ein vDSO.
 - Alle Wartezeiten sind **absolute** Termine in monotonen Nanosekunden.
   `RC_TIME_INFINITE` bedeutet „nie“, `0` bedeutet „nur prüfen“.
+- **Frequenzen:** Die TSC-Frequenz meldet der Bootloader. Den Local-APIC-Zeitgeber
+  kalibriert der Kernel in 5 ms gegen den TSC. Einen PIT braucht er nicht.
 
 ## Prozessstart
 
@@ -198,6 +259,11 @@ Der Kernel kennt kein `fork` und kein `exec`, und ELF kennt er nur für `init`.
 Den Starter in `init` nutzen normale Programme über `usr_process_spawn`. Chromium startet
 seine Kindprozesse mit `libusr` selbst, innerhalb seines eigenen Kontingents.
 
+**Code wird nie kopiert.** Aus dem Boot-Image, das ohnehin im RAM liegt, blendet der Lader
+die Code-Seiten direkt ein. Auf Datenträgern teilen sich alle Instanzen eines Programms die
+Code-Seiten im Dateicache. Nur beschreibbare Daten bekommt jede Instanz neu; eine zweite
+Instanz kostet also nur ihre Daten. Das ist das Gegenstück zu XIP in RCP-OS.
+
 ## Boot
 
 ```
@@ -212,8 +278,15 @@ Firmware (UEFI) → Limine → Kernel → init → devmgr → Treiber → Dienst
    der nur statische ELF-Dateien mit `PT_LOAD` versteht. `init` bekommt als einziger
    Prozess die Wurzel-Ressource, dazu VMOs für Boot-Image, ACPI/DTB und den
    Firmware-Framebuffer.
-4. **`init`** teilt die Wurzel-Ressource in Teilressourcen auf, übergibt sie an `devmgr`
-   und behält selbst keine Hardware-Rechte. Dann startet es die Dienste des Profils.
+4. **`init`** liest `/sys/main.cfg` ([09](09-mikro-welt.md#maincfg)), teilt die
+   Wurzel-Ressource in Teilressourcen auf und übergibt sie an `devmgr`. Selbst behält es
+   nur `INSPECT` für `/now`. Dann startet es die Dienste des Profils und zuletzt die
+   Bodenkonsole.
+
+**Stand M1, Schritt 1:** Schritt 1 und Teile von Schritt 2 sind umgesetzt: eigene GDT und
+Ausnahmetabelle, Boot-Konsole, Local-APIC-Zeitgeber, weitere CPUs geparkt, physischer
+Seitenverwalter und eigene Seitentabellen mit W^X. Die Speicherbereiche des Bootloaders
+sind noch nicht zurückgeholt: Die geparkten CPUs stehen noch auf seinen Tabellen.
 
 ## Größen-Disziplin
 
@@ -225,4 +298,10 @@ Firmware (UEFI) → Limine → Kernel → init → devmgr → Treiber → Dienst
   über das Auslesen von Speicher- und Interrupt-Controller-Knoten hinaus.
 - Jeder neue Syscall braucht eine Begründung, warum er nicht als Dienst-Protokoll umgesetzt
   werden kann.
-- Die CI misst `.text` und den RAM-Bedarf bei jedem Commit ([00](00-vision.md#budgets)).
+- Das Kernel-Log ist ein Ring fester Größe (8 KiB); es wächst nie.
+- **Codebudget:** höchstens 10.000 Zeilen C und Assembler für Kern und eine Architektur,
+  gezählt von `tools/loc.sh` ohne Leer- und Kommentarzeilen. Stand M1, Schritt 1: 1.713.
+- **Messung:** `make` prüft das Image mit `tools/budget.py` gegen `kernel/core/budget.h`;
+  der Kernel prüft beim Boot dieselben Zahlen samt belegter Seiten und schreibt die
+  GATE-Zeile. `make test` bootet in QEMU und verlangt `gate ok`
+  ([00](00-vision.md#budgets)).

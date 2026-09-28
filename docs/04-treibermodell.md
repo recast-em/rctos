@@ -42,32 +42,39 @@ Bustreiber wie `pci`, `xhci` oder `i2c-hid` sind normale Treiber. Sie melden ihr
 Kindgeräte über das Protokoll `devmgr.publish_device` zurück, und `devmgr` sucht dafür
 wieder passende Treiber.
 
+**Auskunft:** `devmgr` führt zwei Tabellen, die unter `/now` lesbar sind: `/now/devs` (jedes
+Gerät mit Treiber, Klasse, Zustand und Bus) und `/now/res` (das Ressourcenbuch: welcher
+MMIO-Bereich, welcher IRQ, welcher IO-Port gehört wem). Welcher Treiber gerade was belegt,
+ist damit jederzeit mit `cat` zu sehen ([09](09-mikro-welt.md#now--der-zustand-als-tabellen)).
+
 ## Treiber-Manifest
 
 ```ini
-# /pkg/drivers/intel-igpu/manifest
-name      = intel-igpu
-binary    = bin/intel-igpu
-class     = display, gpu
-priority  = 20               # Vorrang vor efifb (Priorität 1)
-module    = lib/vulkan_intel.so   # optional: Treibermodul, siehe unten
-module_abi= vulkan-icd-5
-
-[match]
-pci       = 8086:*  class=0300   # Intel, VGA-Controller
-pci_gen   = 9..12                # Gerätetabelle im Treiber entscheidet endgültig
-
-[resources]
-pci_bars  = 0, 2
-msi       = 1
-dma       = yes
+; /sys/drivers/intel-igpu/manifest
+name       = intel-igpu
+binary     = intel-igpu
+class      = display gpu
+priority   = 20                ; Vorrang vor efifb (Priorität 1)
+memory     = 2M                ; Kontingent des Treiberprozesses
+module     = vulkan_intel.so   ; optional: Treibermodul, siehe unten
+module_abi = vulkan-icd-5
+match_pci  = 8086:* 0300       ; Intel, VGA-Controller; die Gerätetabelle im Treiber entscheidet
+pci_bars   = 0 2
+msi        = 1
+dma        = yes
 ```
 
-Mögliche Match-Schlüssel sind `pci` (Hersteller:Gerät, Klasse), `acpi` (HID/CID), `dt`
-(`compatible`), `usb` (Hersteller:Produkt, Klasse) und `virtio` (Gerätetyp). Passen
-mehrere Treiber, entscheidet die höchste `priority`. Zusätzlich kann ein Treiber nach
-dem Start mit `NOT_SUPPORTED` antworten, etwa weil die Generation nicht passt. Dann nimmt
-`devmgr` den nächsten.
+Manifeste haben das Format von `main.cfg`: eine Zeile pro Schlüssel, keine Abschnitte,
+Kommentare mit `;` ([09](09-mikro-welt.md#maincfg)). Mögliche Match-Schlüssel sind
+`match_pci` (Hersteller:Gerät, Klasse), `match_acpi` (HID/CID), `match_dt` (`compatible`),
+`match_usb` (Hersteller:Produkt, Klasse) und `match_virtio` (Gerätetyp). Passen mehrere
+Treiber, entscheidet die höchste `priority`. Zusätzlich kann ein Treiber nach dem Start mit
+`NOT_SUPPORTED` antworten, etwa weil die Generation nicht passt. Dann nimmt `devmgr` den
+nächsten.
+
+**Jeder Treiber hat ein Budget.** `memory` ist sein Kontingent, und `/now/tasks` zeigt, wie
+viel er davon wirklich belegt. Ein Treiber, der mehr will, bekommt `RC_ERR_QUOTA` und kein
+stilles Wachstum.
 
 ## Start eines Treibers
 
@@ -139,7 +146,10 @@ eingebunden. Eine Zwischenschicht als eigener Prozess gibt es dafür nicht.
   | `block` | `nvme`, `ahci` | `virtio-blk` (QEMU) |
 
 - **Absturz:** `devmgr` startet einen Treiber höchstens dreimal innerhalb einer Minute neu
-  und fällt danach auf den nächsten Treiber der Kette zurück.
+  und fällt danach auf den nächsten Treiber der Kette zurück. Jeder Absturz ist ein
+  Exponat: Der Datensatz des Treiberprozesses (Ausnahme, Adresse, Register) bleibt in
+  `/now/tasks` stehen, bis `devmgr` ihn abräumt, und eine Zeile landet in
+  `/log/drivers.log`.
 
 ## Treiberpakete und Treibermodule
 
@@ -163,8 +173,9 @@ Regeln, damit keine DLL-Hölle entsteht:
    `gpu.query(MODULE)` und bekommt ein VMO mit dem Modul zurück, das zu genau diesem Treiber
    gehört. Treiber und Modul kommen immer aus demselben Paket, eine Mischung der
    Versionen ist also ausgeschlossen.
-4. **Nur Prozesse mit `libc.so` laden Module.** Das Basissystem bleibt vollständig statisch.
-   In der Praxis betrifft das Chromiums GPU-Prozess und Vulkan-Programme.
+4. **Nur der Gast lädt Module.** Nur Prozesse mit `libc.so` können Module laden, und
+   `libc.so` gibt es nur im Gast. Die Mikro-Welt bleibt vollständig statisch und ohne
+   libc. In der Praxis betrifft das Chromiums GPU-Prozess.
 
 ## Treiber für Phase 1
 
