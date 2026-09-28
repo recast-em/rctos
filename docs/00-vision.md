@@ -10,6 +10,17 @@ worum es geht, nämlich Code, Inhalte und Verbindungen der Nutzer.
 Die heutige Umgebung aus Schichten, Diensten „für alle Fälle“ und unsichtbaren
 Automatismen weicht einer **überwachbaren, inspizierbaren, kleinen Mikro-Umgebung**.
 
+Das Credo in drei Sätzen:
+
+1. **Das System nimmt sich fast nichts**, damit fast die ganze Kraft des Geräts dem
+   User-Space gehört: Nutzern und Entwicklern.
+2. **Gute Bedienung ist eine Frage der Führung, nicht der Ressourcen.** Sie kostet
+   Nachdenken, kaum RAM und kaum Speicherplatz.
+3. **Ein Raster für alles:** Zellen von 8 × 8 Pixeln. Fenster rasten darauf ein, jedes
+   Fenster ist zugleich ein Zellen-Terminal, und Textoberflächen stehen gleichberechtigt
+   neben Grafik. Moderne Web-Darstellung gibt es in Fenstern oder im Vollbild, wo sie
+   gebraucht wird, und nur dort kostet sie Energie.
+
 ## Zwei Welten
 
 | | Mikro-Welt | Gast |
@@ -76,16 +87,23 @@ Jeder Leitsatz stammt aus der Praxis von RCP-OS und ist hier auf rctos übertrag
 13. **Direktzugriff ist erlaubt, wenn er ausdrücklich vergeben wurde** und widerrufbar
     ist: ein flach gemappter Framebuffer, IO-Ports, eine Lease auf den Bildschirm.
 
+### Sparsam sein
+
+14. **Jedes Aufwachen hat einen Grund.** Kein periodischer Takt, kein Pollen. Der Bildschirm
+    ändert sich nur dort, wo sich Zellen ändern; ein ruhender Bildschirm kostet nichts.
+    Schatten und Abdunkeln sind Zellen-Schattierungen, keine Transparenz. Energie für
+    bewegte Bilder, Web-Darstellung und Vollbild fällt nur an, solange sie sichtbar sind.
+
 ### Menschlich sein
 
-14. **Einschalten und tippen.** Die leere Oberfläche ist eine Konsole mit Prompt, wie beim
+15. **Einschalten und tippen.** Die leere Oberfläche ist eine Konsole mit Prompt, wie beim
     Heimcomputer. Es gibt keinen Splash-Screen; ein Banner ist Konfiguration.
-15. **Ein Byte, ein Zeichen, in der Mikro-Welt.** Konsole, Meldungen, Konfiguration und
+16. **Ein Byte, ein Zeichen, in der Mikro-Welt.** Konsole, Meldungen, Konfiguration und
     Namen verwenden CP437 bzw. ASCII. Unicode ist Sache des Gasts.
-16. **Eine Konfigurationsdatei.** `/sys/main.cfg` im Format `key = value`, beim Boot einmal
+17. **Eine Konfigurationsdatei.** `/sys/main.cfg` im Format `key = value`, beim Boot einmal
     gelesen. Ein unbekannter Schlüssel macht die ganze Datei ungültig, und das System startet
     mit dem Referenzprofil.
-17. **Austauschbar über Protokolle, nicht über Bibliotheken.** Wer mit einem Treiber
+18. **Austauschbar über Protokolle, nicht über Bibliotheken.** Wer mit einem Treiber
     spricht, spricht mit einer Geräteklasse. Wer mit dem Gast spricht, spricht mit einem
     Prozess, dem man den Bildschirm wieder abnehmen kann.
 
@@ -219,6 +237,8 @@ Offene Familienfrage: Die Prompt-Sprache der Bodenkonsole soll CAST werden
 | 2026-09-28 | Dateisystem aus der rcp-fs-Familie (`rcfs`) statt ext2 ([10](10-rcfs.md)). |
 | 2026-09-28 | Konsole: CP437, Palette 0 = EGA mit Recaster-Blau. |
 | 2026-09-28 | Zellen sind 8 × 8 Pixel, Schrift ist `charmap01.png` der Familie (RCP-OS); die PNG ist die eine Wahrheit, `tools/mkfont.py` erzeugt daraus den C-Code. |
+| 2026-09-28 | Zellen werden nur auf Wunsch verdoppelt, und nur als ganze Verdopplung jeder Zeile und Spalte (2 × 2): `cell_double` in `main.cfg`, Vorgabe `no`. Keine automatische Skalierung. |
+| 2026-09-28 | Credo: reduziertes System, volle Kraft für den User-Space, Bedienung durch Führung, ein 8 × 8-Raster für alles, Web in Fenstern oder im Vollbild. |
 | 2026-09-28 | Bootloader Limine 11.4.1 (Basisrevision 6), Version und Prüfsummen fest in `boot/limine.sha256`. |
 
 ## Offene Entscheidungen

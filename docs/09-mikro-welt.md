@@ -62,6 +62,7 @@ Startsatz der Schlüssel (er wächst mit den Meilensteinen):
 | `log_size` | Größe | `64K` | Größe jeder Ringdatei unter `/log` |
 | `user_login` | `none`, `anonymous`, Kontoname | `none` | automatische Anmeldung wie in RCP-OS |
 | `lock_color` | `#RRGGBB` | `#dbdbaa` | Farbe der Anmelde- und Sperroberfläche |
+| `cell_double` | `no`, `yes` | `no` | jede Zellenzeile und -spalte doppelt zeichnen (2 × 2 Pixel je Punkt); das Raster bleibt 8 × 8. Der Boot-Bericht des Kernels ist immer einfach, weil der Kernel `main.cfg` nicht liest |
 
 ```ini
 ; /sys/main.cfg - Beispiel für einen Desktop

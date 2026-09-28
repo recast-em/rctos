@@ -23,13 +23,14 @@ static uint32_t encode(uint32_t rgb)
            (b >> (8 - fb.blue_size)) << fb.blue_shift;
 }
 
-bool con_init(const struct rc_fb *f)
+bool con_init(const struct rc_fb *f, bool doubled)
 {
     if (f->bpp != 32 || !f->base || f->red_size > 8 || f->green_size > 8 || f->blue_size > 8)
         return false;
     fb = *f;
-    /* Das Raster bleibt logisch 8 x 8; große Bildschirme zeichnen jede Zelle vergrößert. */
-    scale = fb.width >= 960 ? (int)(fb.width / 960) : 1;
+    /* Das Raster ist immer 8 x 8. Verdoppeln (jede Zeile und Spalte zweimal) ist ein
+     * Parameter (main.cfg: cell_double), keine Automatik. */
+    scale = doubled ? 2 : 1;
     cell_w = 8 * scale;
     cell_h = 8 * scale;
     cols = (int)(fb.width / cell_w);

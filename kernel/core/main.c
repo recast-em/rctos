@@ -195,7 +195,7 @@ static void boot_report(uint32_t parked, bool timer)
            rc_fmt_size(c, sizeof c, boot.mem.reclaimable));
     report("display", "%u x %u x %u, pitch %u; %u x %u cells of 8 x 8%s, cp437", boot.fb.width,
            boot.fb.height, boot.fb.bpp, boot.fb.pitch, con_cols(), con_rows(),
-           con_scale() > 1 ? " (drawn larger)" : "");
+           con_scale() > 1 ? " (doubled)" : "");
     boot_acpi_tables(&boot, tables, sizeof tables, oem, sizeof oem);
     report("acpi", "oem %s, tables %s", oem[0] ? oem : "?", tables[0] ? tables : "none");
     if (boot.has_time) {
@@ -256,7 +256,7 @@ _Noreturn void kmain(void)
         rc_panic("bootloader too old", "rctos needs the limine protocol, base revision 6");
     arch_init();
 
-    bool screen = boot.has_fb && con_init(&boot.fb);
+    bool screen = boot.has_fb && con_init(&boot.fb, false);
     if (screen)
         draw_header();
     else

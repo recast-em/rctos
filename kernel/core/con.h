@@ -18,7 +18,7 @@ enum {
 };
 #define RC_ATTR(fg, bg) ((uint8_t)((fg) | (bg) << 4))
 
-bool con_init(const struct rc_fb *fb);
+bool con_init(const struct rc_fb *fb, bool doubled);
 bool con_ready(void);
 int con_cols(void);
 int con_rows(void);
