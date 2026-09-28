@@ -197,7 +197,7 @@ Strg+Alt+Entf.
   kommen SMEP und SMAP (x86-64) bzw. PXN und PAN (AArch64, soweit vorhanden).
 - **SYSRET-Falle (x86-64).** Vor `sysret` prüft der Kernel, ob die Rücksprungadresse
   kanonisch ist. Ist sie es nicht, kehrt er über `iret` zurück.
-- **Chromium-Sandbox.** Ein Renderer bekommt nur seinen Mojo-Kanal zum Browser-Prozess,
+- **Chromium-Sandbox.** Ein Renderer bekommt nur seinen Mojo-Kanal zum Einbetter,
   eine `EXEC`-Ressource für V8 und sein Kontingent. Er hat keinen Namensraum, keinen
   Dateizugriff und kein Netz. Auf rctos ist das kein Filter über einem mächtigen System
   wie seccomp auf Linux, sondern die schlichte Abwesenheit von Handles.

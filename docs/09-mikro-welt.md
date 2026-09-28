@@ -54,7 +54,6 @@ Startsatz der Schlüssel (er wächst mit den Meilensteinen):
 | `start` | Programmpfade, durch Leerzeichen getrennt | – | zusätzliche Programme |
 | `console` | `screen`, `serial`, `both` | `both` | wo die Bodenkonsole lebt |
 | `ground_init` | eine Prompt-Zeile | – | läuft unsichtbar vor dem ersten Prompt |
-| `boot_screen` | `report`, `quiet` | `report` | Boot-Bericht des Kernels auf dem Bildschirm |
 | `guest` | Programmpfad | – | der Gast (Chromium-Einbettung) |
 | `guest_memory` | Größe (`K`, `M`, `G`) | 50 % des RAM | Kontingent des Gasts |
 | `net_memory` | Größe | `4M` | Puffer des Netzstacks |
@@ -213,5 +212,6 @@ Wechsel der ganzen Oberfläche.
 Der Boot-Bericht, den der Kernel in M0 zeigt (Bootloader, CPU, Speicher, Anzeige, ACPI,
 Zeit, Budgets, GATE, Log, Statuszeile), ist die Entwicklungsansicht. Ab M2 gehört der
 Bildschirm der Konsole: Der Kernel schreibt den Bericht dann auf die serielle
-Schnittstelle und nach `/now/boot`, und `boot_screen` entscheidet, ob er auch auf dem
-Bildschirm erscheint.
+Schnittstelle und nach `/now/boot`. Auf dem Bildschirm erscheint er nur ohne das Wort
+`quiet` auf der Kernel-Kommandozeile (`cmdline` in `boot/limine.conf`); `main.cfg` liest
+der Kernel nie.

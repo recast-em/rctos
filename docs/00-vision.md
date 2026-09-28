@@ -29,7 +29,7 @@ Hintergrund.
 
 ## Leitsätze
 
-Jeder Leitsatz stammt aus der Praxis von RCP-OS; rechts steht, was er in rctos bedeutet.
+Jeder Leitsatz stammt aus der Praxis von RCP-OS und ist hier auf rctos übertragen.
 
 ### Klein bleiben
 
