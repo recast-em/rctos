@@ -1,6 +1,6 @@
-/* con.c - Zellenkonsole: jede Zelle wird genau einmal gemalt, direkt in den
+/* cellcon.c - Zellenkonsole: jede Zelle wird genau einmal gemalt, direkt in den
  * Framebuffer. Kein Rückspeicher: der Bildschirm ist der Speicher. */
-#include "con.h"
+#include "cellcon.h"
 
 #include "font.h"
 

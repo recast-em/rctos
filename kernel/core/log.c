@@ -1,7 +1,7 @@
 /* log.c - Kernel-Meldungen: jede Zeile auf die serielle Schnittstelle (ASCII),
  * und sobald die Konsole steht auch in ihren Meldungsbereich. */
 #include "arch.h"
-#include "con.h"
+#include "cellcon.h"
 #include "log.h"
 
 static int area_top = -1, area_bottom, area_row;

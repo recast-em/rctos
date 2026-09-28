@@ -4,7 +4,7 @@
 #include "boot.h"
 #include "budget.h"
 #include "buildinfo.h"
-#include "con.h"
+#include "cellcon.h"
 #include "log.h"
 #include "pmm.h"
 #include "time.h"

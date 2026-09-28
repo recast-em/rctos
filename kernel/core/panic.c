@@ -1,7 +1,7 @@
 /* panic.c - wenn der Kernel nicht weiter kann: alles zeigen, dann anhalten.
  * Ein Fehler ist ein Exponat, kein stilles Ende. */
 #include "arch.h"
-#include "con.h"
+#include "cellcon.h"
 
 static void serial_text(const char *s)
 {

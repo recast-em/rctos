@@ -52,7 +52,7 @@ Die Grundsätze:
   stürzt es ab, verfällt die Lease, und `win` zeichnet wieder.
 - **Die sichere Tastenkombination** lässt der Eingabedienst nie an ein Programm durch. Sie
   widerruft jede Vollbild-Lease und bringt `login`.
-- **Die Zellenkonsole ist ein C-Modul** (`con.c`), das Kernel und `win` gemeinsam benutzen:
+- **Die Zellenkonsole ist ein C-Modul** (`cellcon.c`), das Kernel und `win` gemeinsam benutzen:
   dieselbe Schrift, dieselbe Palette, dieselben Regeln.
 
 ## Grafikpuffer
