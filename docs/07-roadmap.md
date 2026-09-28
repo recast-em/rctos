@@ -32,6 +32,10 @@ der ersten Minute.
 
 ## M1 – Kernel-Kern (L)
 
+**Stand 2026-09-28, Schritt 1 erledigt:** physischer Seitenverwalter (`pmm.c`), eigene
+Seitentabellen mit Direktabbildung und W^X, Umschalten von den Tabellen des Bootloaders,
+Selbsttest beim Boot. Als Nächstes: Threads und Scheduler.
+
 - Physischer Speicher, eigene Direct-Map und Seitentabellen, Adressräume, VMO,
   Reservierungen, Verbuchung ohne Overcommit, Speicherdruck-Ereignis
 - Threads, Scheduler (präemptiv, 32 Stufen, tickless), SMP

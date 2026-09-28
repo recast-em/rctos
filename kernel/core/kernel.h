@@ -8,7 +8,7 @@
 #include <stdint.h>
 
 #define RC_VERSION "0.0.1"
-#define RC_MILESTONE "m0"
+#define RC_MILESTONE "m1"
 
 #define RC_KIB(n) ((uint64_t)(n) << 10)
 #define RC_MIB(n) ((uint64_t)(n) << 20)

@@ -6,6 +6,7 @@
 #include "buildinfo.h"
 #include "con.h"
 #include "log.h"
+#include "pmm.h"
 #include "time.h"
 
 extern char rc_image_start[], rc_text_start[], rc_text_end[], rc_rodata_start[],
@@ -135,8 +136,9 @@ static void check_budgets(uint64_t boot_us)
 {
     char used[24];
     uint64_t code = pages(rc_text_start, rc_text_end) + pages(rc_rodata_start, rc_rodata_end);
+    uint64_t tables = (uint64_t)arch_vm_tables() * RC_PAGE_SIZE;
     uint64_t data = pages(rc_image_start, rc_text_start) + pages(rc_data_start, rc_bss_end) +
-                    (uint64_t)boot_pages_used() * RC_PAGE_SIZE;
+                    (uint64_t)pmm_used_pages() * RC_PAGE_SIZE - tables;
     uint64_t image = pages(rc_image_start, rc_data_end);
     bool targets = true;
 
@@ -147,6 +149,9 @@ static void check_budgets(uint64_t boot_us)
     rc_fmt(used, sizeof used, "%u KiB", (unsigned)(data >> 10));
     targets &= budget_row("data+bss", used, data, RC_KIB(RC_BUDGET_DATA_TARGET_KIB),
                           "of " RC_STR(RC_BUDGET_DATA_TARGET_KIB) " KiB target, 1 cpu");
+    rc_fmt(used, sizeof used, "%u KiB", (unsigned)(tables >> 10));
+    targets &= budget_row("tables", used, tables, RC_KIB(RC_BUDGET_TABLES_TARGET_KIB),
+                          "of " RC_STR(RC_BUDGET_TABLES_TARGET_KIB) " KiB target, page tables");
     rc_fmt(used, sizeof used, "%u KiB", (unsigned)(image >> 10));
     targets &= image <= RC_KIB(RC_BUDGET_IMAGE_TARGET_KIB);
     bool limit = budget_row("image", used, image, RC_KIB(RC_BUDGET_IMAGE_LIMIT_KIB),
@@ -166,6 +171,32 @@ static void check_budgets(uint64_t boot_us)
     con_text(COL_LABEL, row, A_LABEL, "gate");
     con_text(COL_VALUE, row++, !limit ? A_BAD : targets ? A_OK : A_WARN, verdict);
     serial_line(!limit ? "rctos: gate failed" : "rctos: gate ok");
+}
+
+/* Selbsttest des Speichers: Seitenverwalter und Rechte der eigenen Seitentabellen. */
+static const char *memory_selftest(void)
+{
+    static const char text_probe[] = "rodata";
+    static uint64_t data_probe;
+    uint64_t a = pmm_alloc(), b = pmm_alloc();
+    if (!a || !b || a == b)
+        return "pmm: two allocations failed";
+    if (*(uint64_t *)(boot_hhdm() + a) != 0)
+        return "pmm: page not zeroed";
+    pmm_free(b);
+    if (pmm_alloc() != b)
+        return "pmm: freed page not reused";
+    pmm_free(a);
+    pmm_free(b);
+    if (arch_vm_query((uint64_t)memory_selftest) != (RC_VM_READ | RC_VM_EXEC))
+        return "paging: code is not read+exec only";
+    if (arch_vm_query((uint64_t)text_probe) != RC_VM_READ)
+        return "paging: constants are not read only";
+    if (arch_vm_query((uint64_t)&data_probe) != (RC_VM_READ | RC_VM_WRITE))
+        return "paging: data is not read+write only";
+    if (arch_vm_query(boot_hhdm() + a) != (RC_VM_READ | RC_VM_WRITE))
+        return "paging: direct map is not read+write only";
+    return 0;
 }
 
 static void boot_report(uint32_t parked, bool timer)
@@ -193,6 +224,13 @@ static void boot_report(uint32_t parked, bool timer)
            rc_fmt_size(a, sizeof a, boot.mem.usable), boot.mem.usable_regions,
            rc_fmt_size(b, sizeof b, boot.mem.largest_run),
            rc_fmt_size(c, sizeof c, boot.mem.reclaimable));
+    const char *fail = memory_selftest();
+    if (fail)
+        rc_panic("memory self-test failed", fail);
+    report("paging", "own tables%s; kernel w^x: code r-x, constants r--, data rw-; %u table pages",
+           arch_vm_huge() ? " with 1 GiB pages" : " with 2 MiB pages", arch_vm_tables());
+    report("pages", "%s free; freed pages form a list inside themselves; self-test ok",
+           rc_fmt_size(a, sizeof a, pmm_free_bytes()));
     report("display", "%u x %u x %u, pitch %u; %u x %u cells of 8 x 8%s, cp437", boot.fb.width,
            boot.fb.height, boot.fb.bpp, boot.fb.pitch, con_cols(), con_rows(),
            con_scale() > 1 ? " (doubled)" : "");
@@ -255,6 +293,10 @@ _Noreturn void kmain(void)
     if (!boot_collect(&boot))
         rc_panic("bootloader too old", "rctos needs the limine protocol, base revision 6");
     arch_init();
+    pmm_init();
+    if (!boot.kernel_phys)
+        rc_panic("no kernel address", "the bootloader did not report where the kernel lies");
+    arch_vm_init(boot.kernel_phys, boot.kernel_virt);
 
     bool screen = boot.has_fb && con_init(&boot.fb, false);
     if (screen)

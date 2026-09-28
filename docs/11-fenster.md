@@ -131,6 +131,27 @@ GPU diese Fenster und legt Vollbild-Inhalte direkt auf den Bildschirm
   holt die Sperroberfläche.
 - **Keine Popups.** Systemdialoge sind ganze Oberflächen ([09](09-mikro-welt.md#systemoberflächen-vollbild-statt-popup)).
 
+### Sprites
+
+Sprites sind **Überlagerungen im OAM-Format von RCP-OS** (entschieden 2026-09-28):
+
+- 128 Einträge zu 8 Byte: `i16 X` (`0x8000` = verborgen, der einzige Ausschalter), `i16 Y`,
+  `u16 pattern` (Bits 0–11 Zeilenversatz × 4 Byte ab der Belegung, Bit 14 = Ebene),
+  `u8 Höhe − 1`, `u8 flags` (Bits 0–1 Modus, Bits 2–3 Palette, Bits 4–7 Farbe).
+- Alle 32 Pixel breit (eine `u32`-Musterzeile, Bit 31 links), 1–128 Pixel hoch; gesetzte
+  Bits malen `palette[pal][color]`, gelöschte sind durchsichtig. Innerhalb einer Ebene liegt
+  der kleinere OAM-Index vorn.
+- **Zwei Ebenen:** L0 vor allem, L1 hinter den Zellen-Schattierungen; in schattierten Zellen
+  wird L1 mit `DIM` gemalt, L0 schwebt darüber.
+- **Mustersatz und OAM werden gemeinsam vergeben** (`NEW`, `PATCH`, `SHARE` wie
+  `SYS_OAM_LOAD`); OAM 0 und 1 gehören der Shell (Markierung und Tooltip). Das Ende eines
+  Programms gibt seine Einträge frei.
+- **Atomar bewegen:** Änderungen werden gesammelt und zum nächsten Umschalten gemeinsam
+  sichtbar (wie `SYS_OAM_SET_V`).
+- **Unterschied zu RCP-OS:** Es gibt keine Grenze von 16 Sprites je Zeile und daher kein
+  Flackern durch Multiplexing. Ein bewegtes Sprite beschädigt nur die Zellen, die es alt und
+  neu berührt; `win` setzt genau diese neu zusammen.
+
 ### Zeiger
 
 Der Mauszeiger ist eine eigene Überlagerung über allem, auf echter Hardware die
@@ -153,16 +174,15 @@ Hardware-Cursor-Ebene der Anzeige. Er bewegt sich ohne ein einziges Neuzeichnen 
 |---|---|---|
 | Zeilen-Compositor auf Core 1, Scanline-Budget | Zellen-Compositor nach Schaden, Page-Flip bei VBlank | die Anzeige liest aus dem Speicher; es gibt keinen Strahl |
 | Segmente A/B, Raster-Effekte je Zeile, `SYS_LINE_WAIT` | – | ohne Strahl kein Rennen mit ihm |
-| 128 Sprites (OAM), 16 je Zeile | Sprites als Überlagerungen der Fensterschicht, gleiches OAM-Format, **offen** ([Offene Punkte](#offene-punkte)) | kein Zeilenbudget, aber gleiche Programmierschnittstelle wünschenswert |
+| 128 Sprites (OAM), 16 je Zeile | 128 Sprites als Überlagerungen der Fensterschicht im gleichen OAM-Format, **ohne** Grenze je Zeile ([Sprites](#sprites)) | kein Zeilenbudget; dieselbe Programmierschnittstelle wie in der Familie |
 | fester Bildschirm 640 × 480, 80 × 60 Zellen | Raster so groß wie die Anzeige; `cell_double` verdoppelt Zeilen und Spalten | PC-Bildschirme sind größer |
 | Mono-Profil (1 Bit) | – | es gibt keine 1-Bit-Ausgabe |
 
 ## Offene Punkte
 
-1. **Sprites:** als Überlagerung mit dem OAM-Format von RCP-OS oder weglassen.
-2. **Symbolblatt:** `charmap02.png` aus RCP-OS übernehmen (Slot 1).
-3. **EGA-Palette als RGB332:** die exakten Bytes von RCP-OS übernehmen; der Kernel von M0
+1. **Symbolblatt:** `charmap02.png` aus RCP-OS übernehmen (Slot 1).
+2. **EGA-Palette als RGB332:** die exakten Bytes von RCP-OS übernehmen; der Kernel von M0
    rechnet noch mit 24-Bit-Werten.
-4. **Schnittstelle:** Syscalls wie `SYS_WIN_*` in RCP-OS oder ein Protokoll von `win`;
+3. **Schnittstelle:** Syscalls wie `SYS_WIN_*` in RCP-OS oder ein Protokoll von `win`;
    Empfehlung: Protokoll von `win` mit denselben Namen und Semantiken, damit die RCP-VM sie
    1:1 abbilden kann.

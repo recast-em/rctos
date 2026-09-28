@@ -126,17 +126,17 @@ und `tools/budget.py` lesen dieselbe Datei. Dieses Dokument ändert sich nur zus
 
 ### Größe
 
-| Komponente | Harte Grenze | Ziel | Stand M0 |
+| Komponente | Harte Grenze | Ziel | Stand M1, Schritt 1 |
 |---|---|---|---|
-| Kernel-Image | 1 MiB | ≤ 256 KiB | 28 KiB |
+| Kernel-Image | 1 MiB | ≤ 256 KiB | 32 KiB |
 | Mikro-Welt auf dem Datenträger (Kernel, Dienste, Treiber, Werkzeuge) | 10 MiB | ≤ 2 MiB | – |
 | Gast (Chromium, Mesa-Modul, libc, Daten) | – | gemessen und ausgewiesen | – |
 
 ### Code
 
-| Komponente | Ziel | Stand M0 |
+| Komponente | Ziel | Stand M1, Schritt 1 |
 |---|---|---|
-| Kernel, eigener Code (Kern und eine Architektur; C und Assembler, ohne Leer- und Kommentarzeilen) | ≤ 10.000 Zeilen | 1.472 |
+| Kernel, eigener Code (Kern und eine Architektur; C und Assembler, ohne Leer- und Kommentarzeilen) | ≤ 10.000 Zeilen | 1.713 |
 | Mikro-Welt gesamt, eigener Code | ≤ 60.000 Zeilen | – |
 | Übernommener Code (lwIP, musl, Mesa, Chromium) | wird getrennt ausgewiesen | – |
 
@@ -146,12 +146,12 @@ Gemessen wird im Profil `minimal` nach dem Boot im Leerlauf: alle physischen Sei
 Kernel und Prozesse belegen. Nicht mitgezählt werden Firmware-Speicher, ACPI-Tabellen und
 der Framebuffer.
 
-| Posten | Ziel | Stand M0 |
+| Posten | Ziel | Stand M1, Schritt 1 |
 |---|---|---|
-| Kernel-Code und -Konstanten | 160 KiB | 20 KiB |
-| Kernel-Daten, Objekt-Pools, Handle-Tabellen | 48 KiB | 32 KiB (mit CPU-Anteil) |
+| Kernel-Code und -Konstanten | 120 KiB | 24 KiB |
+| Kernel-Daten, Objekt-Pools, Handle-Tabellen | 48 KiB | 24 KiB (mit CPU-Anteil) |
 | Pro CPU (Kernel-Stapel, TSS, Vektortabelle, Run-Queue) | 16 KiB | |
-| Direct-Map-Seitentabellen (1-GiB-Seiten) | 8 KiB | – (noch die des Bootloaders) |
+| Seitentabellen des Kernels: Direktabbildung mit großen Seiten, Kernel mit W^X, MMIO | 48 KiB | 44–48 KiB |
 | `init` (mit Namensdienst und Starter) | 80 KiB | – |
 | `devmgr` | 72 KiB | – |
 | Treiber `uart16550` | 48 KiB | – |
@@ -241,6 +241,7 @@ Offene Familienfrage: Die Prompt-Sprache der Bodenkonsole soll CAST werden
 | 2026-09-28 | Zellen sind 8 × 8 Pixel, Schrift ist `charmap01.png` der Familie (RCP-OS); die PNG ist die eine Wahrheit, `tools/mkfont.py` erzeugt daraus den C-Code. |
 | 2026-09-28 | Zellen werden nur auf Wunsch verdoppelt, und nur als ganze Verdopplung jeder Zeile und Spalte (2 × 2): `cell_double` in `main.cfg`, Vorgabe `no`. Keine automatische Skalierung. |
 | 2026-09-28 | Die Fensterschicht gehört der Mikro-Welt; das **Zellenmodell von RCP-OS gilt 1:1** ([11](11-fenster.md)). Chromium ist eine Render-Instanz in Fenstern oder im Vollbild. |
+| 2026-09-28 | Sprites sind Überlagerungen der Fensterschicht im OAM-Format von RCP-OS, ohne Grenze je Zeile ([11](11-fenster.md#sprites)). |
 | 2026-09-28 | Chromium wird nur mit der Content-Schicht eingebettet (`surf`), ohne `//chrome` und Ash. |
 | 2026-09-28 | Credo: reduziertes System, volle Kraft für den User-Space, Bedienung durch Führung, ein 8 × 8-Raster für alles, Web in Fenstern oder im Vollbild. |
 | 2026-09-28 | Bootloader Limine 11.4.1 (Basisrevision 6), Version und Prüfsummen fest in `boot/limine.sha256`. |
@@ -253,7 +254,6 @@ Offene Familienfrage: Die Prompt-Sprache der Bodenkonsole soll CAST werden
 | Prompt-Sprache der Bodenkonsole | CAST (Familie); M2 startet mit dem Rettungs-Prompt von RCP-OS | eigener minimaler Befehlsinterpreter | M5 |
 | Netzstack | lwIP (C, klein, ausgereift) | eigener minimaler IPv4/IPv6-Stack | M3 |
 | rcfs: Dateien über 4 GiB | v1 begrenzt auf 4 GiB je Datei (bewusste Grenze) | 64-Bit-Größe in einer Formatrevision | M3 |
-| Sprites in der Fensterschicht | Überlagerungen im OAM-Format von RCP-OS | weglassen | M2 |
 | ARM-Referenzboard | Raspberry Pi 5 (V3D, Mesa `v3dv`) | RK3588-Board (Mali-G610, Mesa `panvk`) | M9 |
 
 ## Glossar

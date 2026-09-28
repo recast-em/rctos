@@ -32,9 +32,16 @@ struct rc_boot {
 /* Liest alle Antworten des Bootloaders; false, wenn das Protokoll nicht passt. */
 bool boot_collect(struct rc_boot *b);
 uint64_t boot_hhdm(void);
-/* Eine genullte physische Seite aus dem höchsten freien Bereich (nur beim Boot). */
-uint64_t boot_alloc_page(void);
-uint32_t boot_pages_used(void);
+/* Die Speicherkarte, Eintrag für Eintrag. */
+enum rc_memtype {
+    RC_MEM_USABLE,       /* frei */
+    RC_MEM_LOADER,       /* Bootloader-Daten, später zurückzuholen */
+    RC_MEM_KERNEL,       /* Kernel und Module */
+    RC_MEM_FIRMWARE,     /* ACPI und Firmware-Laufzeit: abbilden, nicht anfassen */
+    RC_MEM_FRAMEBUFFER,
+    RC_MEM_UNMAPPED,     /* reserviert oder defekt */
+};
+bool boot_memmap(uint32_t i, uint64_t *base, uint64_t *len, enum rc_memtype *type);
 /* Weitere CPUs schlafen legen; gibt ihre Zahl zurück. */
 uint32_t boot_park_cpus(void);
 /* ACPI: Signaturen der Tabellen als "FACP APIC HPET ..." */

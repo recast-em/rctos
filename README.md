@@ -16,12 +16,12 @@ Embedded-Geräten und auf vollständigen Desktops laufen.
 
 ## Eckdaten
 
-| Thema | Festlegung | Stand M0 |
+| Thema | Festlegung | Stand M1, Schritt 1 |
 |---|---|---|
 | Leitbild | Mikro-Welt klein, gemessen, inspizierbar; volle Kraft für den User-Space; Chromium ist der Gast und die eine Ausnahme | |
 | Oberfläche | Fensterschicht der Mikro-Welt, 8 × 8-Zellen (Schrift `charmap01.png`), Zellenmodell 1:1 aus RCP-OS | Boot-Konsole in 8 × 8 |
-| Kernel | Mikrokernel in C11, Image ≤ 1 MiB (Ziel ≤ 256 KiB), ≤ 10.000 Zeilen | 28 KiB, 1.472 Zeilen |
-| RAM-Bedarf | Mikro-Welt ohne GUI und Netz im Leerlauf: ≤ 512 KiB resident | Kernel: 20 KiB Code, 32 KiB Daten |
+| Kernel | Mikrokernel in C11, Image ≤ 1 MiB (Ziel ≤ 256 KiB), ≤ 10.000 Zeilen | 32 KiB, 1.713 Zeilen |
+| RAM-Bedarf | Mikro-Welt ohne GUI und Netz im Leerlauf: ≤ 512 KiB resident | Kernel: 24 KiB Code, 24 KiB Daten, 48 KiB Seitentabellen |
 | Multitasking | präemptiv, SMP, 32 feste Prioritätsstufen, tickless | Leerlauf: 1 Aufwachen pro Minute |
 | Rechte | ausschließlich über Handles (Capabilities); kein Root im Kernel | |
 | Auskunft | Systemzustand als Tabellen unter `/now`; Fehler bleiben als Exponate stehen | Panik-Bildschirm mit allen Registern |

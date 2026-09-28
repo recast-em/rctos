@@ -63,17 +63,26 @@ Treiber.
 
 - **Allgemeine Seiten (4 KiB):** Freie Seiten bilden eine verkettete Liste *in sich selbst*.
   Der Zeiger auf die nächste Seite steht in der freien Seite, die über die Direct-Map
-  erreichbar ist. Dadurch gibt es keine Metadaten pro Seite, und der Verwaltungsaufwand
-  bleibt unabhängig von der RAM-Größe. Jede CPU hat einen kleinen Zwischenspeicher (etwa
-  32 Seiten), damit sie nicht ständig um die globale Liste konkurriert.
+  erreichbar ist. Noch nie benutzte Seiten schneidet der Verwalter von oben von den freien
+  Bereichen der Speicherkarte ab. Dadurch gibt es keine Metadaten pro Seite, der Aufwand ist
+  unabhängig von der RAM-Größe, und beim Start wird der RAM nicht angefasst (umgesetzt in
+  `pmm.c`). Später bekommt jede CPU einen kleinen Zwischenspeicher (etwa 32 Seiten), damit
+  sie nicht ständig um die globale Liste konkurriert.
 - **Zusammenhängender Pool:** Für DMA-Puffer ohne IOMMU und für Ringpuffer reserviert der
   Kernel beim Boot einen Pool. Die Größe steht in der Boot-Konfiguration; Vorgabe sind
   4 MiB im Profil `minimal` und 64 MiB im Profil `desktop`. Nur dieser Pool hat eine Bitmap.
 - **Seitenbesitz:** Eine Seite gehört genau einem VMO. Deshalb braucht es keine
   Referenzzähler pro Seite. Geteilt werden VMOs, nicht Seiten. Copy-on-Write-Klone gibt es
   in Version 1 nicht.
-- **Direct-Map:** Der gesamte physische Speicher ist im Kernel-Adressraum eingeblendet, mit
-  1-GiB-Seiten bzw. 2-MiB-Seiten als Rückfall.
+- **Direct-Map:** RAM, Firmware-Daten und Framebuffer sind im Kernel-Adressraum
+  eingeblendet, an derselben Stelle wie beim Bootloader, damit dessen Zeiger gültig bleiben.
+  Aneinander grenzende Bereiche gleicher Art werden zusammengefasst und mit 1-GiB-,
+  2-MiB- oder 4-KiB-Seiten abgebildet, je nachdem, was passt. RAM ist write-back, der
+  Framebuffer write-combining, MMIO ungecacht (PAT wie bei Limine). Lücken wie der
+  VGA-Bereich unter 1 MiB bleiben unabgebildet. Die Seitentabellen dafür kosten auf der
+  UEFI-Referenzmaschine 48 KiB (eigener Budgetposten).
+- **Kernel mit W^X:** Code `r-x`, Konstanten `r--`, Daten und bss `rw-`; ein Selbsttest beim
+  Boot prüft die Rechte in den Tabellen.
 
 ### Virtueller Speicher
 
@@ -274,9 +283,10 @@ Firmware (UEFI) → Limine → Kernel → init → devmgr → Treiber → Dienst
    nur `INSPECT` für `/now`. Dann startet es die Dienste des Profils und zuletzt die
    Bodenkonsole.
 
-**Stand M0:** Schritt 1 und Teile von Schritt 2 sind umgesetzt: eigene GDT und
-Ausnahmetabelle, Boot-Konsole, Local-APIC-Zeitgeber, weitere CPUs geparkt. Der Kernel
-läuft noch auf den Seitentabellen von Limine und trägt nur MMIO-Seiten selbst ein.
+**Stand M1, Schritt 1:** Schritt 1 und Teile von Schritt 2 sind umgesetzt: eigene GDT und
+Ausnahmetabelle, Boot-Konsole, Local-APIC-Zeitgeber, weitere CPUs geparkt, physischer
+Seitenverwalter und eigene Seitentabellen mit W^X. Die Speicherbereiche des Bootloaders
+sind noch nicht zurückgeholt: Die geparkten CPUs stehen noch auf seinen Tabellen.
 
 ## Größen-Disziplin
 
@@ -290,7 +300,7 @@ läuft noch auf den Seitentabellen von Limine und trägt nur MMIO-Seiten selbst 
   werden kann.
 - Das Kernel-Log ist ein Ring fester Größe (8 KiB); es wächst nie.
 - **Codebudget:** höchstens 10.000 Zeilen C und Assembler für Kern und eine Architektur,
-  gezählt von `tools/loc.sh` ohne Leer- und Kommentarzeilen. Stand M0: 1.472.
+  gezählt von `tools/loc.sh` ohne Leer- und Kommentarzeilen. Stand M1, Schritt 1: 1.713.
 - **Messung:** `make` prüft das Image mit `tools/budget.py` gegen `kernel/core/budget.h`;
   der Kernel prüft beim Boot dieselben Zahlen samt belegter Seiten und schreibt die
   GATE-Zeile. `make test` bootet in QEMU und verlangt `gate ok`

@@ -32,27 +32,43 @@ __attribute__((used, section(".limine_requests_end")))
 static volatile uint64_t requests_end[] = LIMINE_REQUESTS_END_MARKER;
 
 static uint64_t hhdm;
-static uint64_t alloc_top, alloc_floor;   /* Seiten für den Boot, von oben nach unten */
-static uint32_t pages_used;
 
 uint64_t boot_hhdm(void)
 {
     return hhdm;
 }
 
-uint64_t boot_alloc_page(void)
+bool boot_memmap(uint32_t i, uint64_t *base, uint64_t *len, enum rc_memtype *type)
 {
-    if (alloc_top < alloc_floor + RC_PAGE_SIZE)
-        rc_panic("out of boot memory", "boot_alloc_page: no usable region left");
-    alloc_top -= RC_PAGE_SIZE;
-    memset((void *)(hhdm + alloc_top), 0, RC_PAGE_SIZE);
-    pages_used++;
-    return alloc_top;
-}
-
-uint32_t boot_pages_used(void)
-{
-    return pages_used;
+    struct limine_memmap_response *r = memmap_req.response;
+    if (!r || i >= r->entry_count)
+        return false;
+    struct limine_memmap_entry *e = r->entries[i];
+    *base = e->base;
+    *len = e->length;
+    switch (e->type) {
+    case LIMINE_MEMMAP_USABLE:
+        *type = RC_MEM_USABLE;
+        break;
+    case LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE:
+        *type = RC_MEM_LOADER;
+        break;
+    case LIMINE_MEMMAP_EXECUTABLE_AND_MODULES:
+        *type = RC_MEM_KERNEL;
+        break;
+    case LIMINE_MEMMAP_ACPI_RECLAIMABLE:
+    case LIMINE_MEMMAP_ACPI_NVS:
+    case LIMINE_MEMMAP_RESERVED_MAPPED:
+        *type = RC_MEM_FIRMWARE;
+        break;
+    case LIMINE_MEMMAP_FRAMEBUFFER:
+        *type = RC_MEM_FRAMEBUFFER;
+        break;
+    default:
+        *type = RC_MEM_UNMAPPED;
+        break;
+    }
+    return true;
 }
 
 static void collect_memory(struct rc_mem *m)
@@ -67,12 +83,8 @@ static void collect_memory(struct rc_mem *m)
         case LIMINE_MEMMAP_USABLE:
             m->usable += e->length;
             m->usable_regions++;
-            if (e->length > m->largest_run) {
+            if (e->length > m->largest_run)
                 m->largest_run = e->length;
-                /* Boot-Seiten kommen vom oberen Ende des größten Bereichs. */
-                alloc_floor = e->base;
-                alloc_top = e->base + e->length;
-            }
             break;
         case LIMINE_MEMMAP_BOOTLOADER_RECLAIMABLE:
         case LIMINE_MEMMAP_ACPI_RECLAIMABLE:

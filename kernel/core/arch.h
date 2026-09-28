@@ -24,8 +24,14 @@ void arch_wait(void);              /* Interrupts an und schlafen, atomar */
 _Noreturn void arch_halt_forever(void);
 void arch_ap_park(struct limine_mp_info *info);
 
+/* Eigene Seitentabellen: Direktabbildung und Kernel mit W^X; danach lädt die CPU sie. */
+void arch_vm_init(uint64_t kernel_phys, uint64_t kernel_virt);
 /* Eine MMIO-Region ungecacht in die Direktabbildung eintragen. */
 void *arch_map_mmio(uint64_t phys, uint64_t size);
+enum { RC_VM_READ = 1, RC_VM_WRITE = 2, RC_VM_EXEC = 4 };
+uint32_t arch_vm_query(uint64_t va);   /* Rechte einer Adresse, 0 = nicht abgebildet */
+uint32_t arch_vm_tables(void);         /* Seiten in eigenen Seitentabellen */
+bool arch_vm_huge(void);               /* 1-GiB-Seiten verfügbar */
 
 /* Zeitgeber im Einmal-Modus (x86-64: Local APIC), kalibriert gegen den Zähler. */
 bool arch_timer_init(uint64_t counter_hz);
