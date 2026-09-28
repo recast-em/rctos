@@ -12,7 +12,7 @@ Embedded-Geräten und auf vollständigen Desktops laufen.
 > **Status:** M0 ist erledigt. Der Kernel bootet in QEMU (UEFI und BIOS), zeigt seinen
 > Boot-Bericht auf dem Bildschirm, prüft seine Budgets und schläft, bis sich die Uhr ändert.
 
-![Der Bildschirm von rctos nach M0 in QEMU](docs/bilder/m0.png)
+![Der Bildschirm von rctos in QEMU](docs/bilder/kernel.png)
 
 ## Eckdaten
 
