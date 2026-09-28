@@ -2,7 +2,7 @@
 #ifndef RC_BOOT_H
 #define RC_BOOT_H
 
-#include "con.h"
+#include "cellcon.h"
 #include "kernel.h"
 
 struct rc_mem {

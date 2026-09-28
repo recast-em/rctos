@@ -11,6 +11,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Dateinamen für Windows
+        run: |
+          bad=$(git ls-files | grep -iE '(^|/)(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.[^/]*)?$|[<>:"\\|?*]' || true)
+          if [ -n "$bad" ]; then echo "Windows cannot check out:"; echo "$bad"; exit 1; fi
+
       - name: Werkzeuge
         run: |
           sudo apt-get update
