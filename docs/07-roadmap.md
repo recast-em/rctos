@@ -15,7 +15,7 @@ Erledigt am 2026-09-28.
 - Limine 11.4.1 (Basisrevision 6), Version und Prüfsummen fest in `boot/limine.sha256`;
   Boot-Image als hybrides ISO für UEFI und BIOS
 - Kernel: serielle Ausgabe, eigene GDT mit TSS, Ausnahmetabelle mit Panik-Bildschirm,
-  Zellenkonsole (CP437, 8 × 16) direkt im Framebuffer, Boot-Bericht, Local-APIC-Zeitgeber im
+  Zellenkonsole (CP437, 8 × 8, Schrift der Familie) direkt im Framebuffer, Boot-Bericht, Local-APIC-Zeitgeber im
   Einmal-Modus, weitere CPUs schlafen, Leerlauf mit `hlt`
 - Budgets: `kernel/core/budget.h` als eine Quelle; `tools/budget.py` prüft das Image beim
   Bauen, der Kernel prüft beim Boot und schreibt die GATE-Zeile

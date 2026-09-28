@@ -35,7 +35,7 @@ Der Bildschirm gehört der Mikro-Welt; der Gast bekommt ihn geliehen.
 
 | Wer | Wie er zeichnet | Wann |
 |---|---|---|
-| Kernel | Boot-Konsole direkt in den Firmware-Framebuffer (Zellen 8 × 16, CP437) | beim Boot und bei einer Panik |
+| Kernel | Boot-Konsole direkt in den Firmware-Framebuffer (Zellen 8 × 8, CP437) | beim Boot und bei einer Panik |
 | `console` (Bodenkonsole) | Zellen per `map_framebuffer` in den geleasten Scanout-Speicher, nur geänderte Zellen | immer, wenn niemand sonst die Lease hat |
 | `login` | Vollbild-Oberfläche, ebenfalls Zellen | Anmeldung, Sperre, sichere Tastenkombination |
 | Programme der Mikro-Welt | direkt in den Framebuffer (`framebuffer.map`) | geliehen von der Konsole |

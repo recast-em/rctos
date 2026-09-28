@@ -28,9 +28,10 @@ bool con_init(const struct rc_fb *f)
     if (f->bpp != 32 || !f->base || f->red_size > 8 || f->green_size > 8 || f->blue_size > 8)
         return false;
     fb = *f;
-    scale = fb.width >= 2560 ? 2 : 1;     /* große Bildschirme: doppelte Zellen */
+    /* Das Raster bleibt logisch 8 x 8; große Bildschirme zeichnen jede Zelle vergrößert. */
+    scale = fb.width >= 960 ? (int)(fb.width / 960) : 1;
     cell_w = 8 * scale;
-    cell_h = 16 * scale;
+    cell_h = 8 * scale;
     cols = (int)(fb.width / cell_w);
     rows = (int)(fb.height / cell_h);
     x0 = (int)(fb.width - cols * cell_w) / 2;
@@ -71,10 +72,10 @@ void con_put(int col, int row, uint8_t ch, uint8_t attr)
     if (!ready || col < 0 || row < 0 || col >= cols || row >= rows)
         return;
     uint32_t fg = pixel[attr & 15], bg = pixel[attr >> 4];
-    const uint8_t *glyph = rc_font8x16[ch];
+    const uint8_t *glyph = rc_font8x8[ch];
     uint8_t *line = fb.base + (uint64_t)(y0 + row * cell_h) * fb.pitch +
                     (uint64_t)(x0 + col * cell_w) * 4;
-    for (int y = 0; y < 16; y++) {
+    for (int y = 0; y < 8; y++) {
         for (int sy = 0; sy < scale; sy++, line += fb.pitch) {
             uint32_t *px = (uint32_t *)line;
             for (int x = 0; x < 8; x++) {

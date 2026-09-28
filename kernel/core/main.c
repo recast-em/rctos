@@ -193,9 +193,9 @@ static void boot_report(uint32_t parked, bool timer)
            rc_fmt_size(a, sizeof a, boot.mem.usable), boot.mem.usable_regions,
            rc_fmt_size(b, sizeof b, boot.mem.largest_run),
            rc_fmt_size(c, sizeof c, boot.mem.reclaimable));
-    report("display", "%u x %u x %u, pitch %u; %u x %u cells of 8 x 16%s, cp437", boot.fb.width,
+    report("display", "%u x %u x %u, pitch %u; %u x %u cells of 8 x 8%s, cp437", boot.fb.width,
            boot.fb.height, boot.fb.bpp, boot.fb.pitch, con_cols(), con_rows(),
-           con_scale() > 1 ? " (scaled x2)" : "");
+           con_scale() > 1 ? " (drawn larger)" : "");
     boot_acpi_tables(&boot, tables, sizeof tables, oem, sizeof oem);
     report("acpi", "oem %s, tables %s", oem[0] ? oem : "?", tables[0] ? tables : "none");
     if (boot.has_time) {

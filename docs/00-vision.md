@@ -217,7 +217,8 @@ Offene Familienfrage: Die Prompt-Sprache der Bodenkonsole soll CAST werden
 | 2026-09-28 | Kein Overcommit, kein OOM-Killer, kein automatisches Auslagern ([01](01-kernel.md#virtueller-speicher)). |
 | 2026-09-28 | Systemzustand als `/now`-Tabellen; Fehler als Exponate. |
 | 2026-09-28 | Dateisystem aus der rcp-fs-Familie (`rcfs`) statt ext2 ([10](10-rcfs.md)). |
-| 2026-09-28 | Konsole: CP437, 8 × 16, Schrift aus Spleen (BSD-2) mit elf eigenen Zeichen; Palette 0 = EGA mit Recaster-Blau. |
+| 2026-09-28 | Konsole: CP437, Palette 0 = EGA mit Recaster-Blau. |
+| 2026-09-28 | Zellen sind 8 × 8 Pixel, Schrift ist `charmap01.png` der Familie (RCP-OS); die PNG ist die eine Wahrheit, `tools/mkfont.py` erzeugt daraus den C-Code. |
 | 2026-09-28 | Bootloader Limine 11.4.1 (Basisrevision 6), Version und Prüfsummen fest in `boot/limine.sha256`. |
 
 ## Offene Entscheidungen

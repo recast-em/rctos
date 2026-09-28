@@ -70,7 +70,7 @@ kernel/            Mikrokernel (C11)
 boot/              Limine-Konfiguration und festgelegte Version
 tools/             Budget, Codezeilen, Schrift, QEMU, Limine
 docs/              Konzeptpapiere
-LICENSES/          Lizenzen der übernommenen Teile (Spleen, Limine)
+LICENSES/          Lizenzen der übernommenen Teile (Limine)
 
 geplant:
 kits/              System-Kit, Treiber-Kit, User-Kit

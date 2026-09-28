@@ -85,7 +85,7 @@ wie beim Heimcomputer. Die Regeln übernehmen die „Ground Console“ von RCP-O
    Sitzung: Ein Gerät ohne Bildschirm ist genauso bedienbar.
 3. **Kein Rückspeicher.** Der Bildschirm ist ihr Speicher. Zellen werden nur gemalt, wenn
    sie sich ändern, und dann genau einmal. So arbeitet schon die Kernel-Konsole von M0.
-4. **Aussehen:** Zellen von 8 × 16 Pixeln, CP437, Palette 0 aus den EGA-Farben mit dem
+4. **Aussehen:** Zellen von 8 × 8 Pixeln in der Schrift der Familie (`charmap01.png`), CP437, Palette 0 aus den EGA-Farben mit dem
    Recaster-Blau als Eintrag 1; schwarzer Grund. Die letzte Zeile ist die **Statuszeile**:
    links der Zustand, rechts die Kachel `HH:MM  U <uid>`. Die Uhr zeigt bewusst keine
    Sekunden: Ohne Sekunden gibt es nichts zu animieren, und die CPU schläft bis zur

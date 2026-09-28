@@ -1,4 +1,4 @@
-/* con.h - Zellenkonsole: Textzellen (CP437, 8 x 16) direkt auf dem Framebuffer.
+/* con.h - Zellenkonsole: Textzellen (CP437, 8 x 8) direkt auf dem Framebuffer.
  * Ohne Zwischenspeicher: der Bildschirm ist der Speicher. */
 #ifndef RC_CON_H
 #define RC_CON_H

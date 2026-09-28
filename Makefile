@@ -4,7 +4,7 @@
 #   make iso        Boot-Image (build/rctos-x86_64.iso, UEFI und BIOS)
 #   make run        in QEMU starten (Fenster, serielles Log im Terminal)
 #   make test       ohne Fenster booten (UEFI und BIOS), Log prüfen, Bildschirmfotos
-#   make font       Konsolenschrift aus Spleen neu erzeugen
+#   make font       Konsolenschrift aus raw_assets/charmap01.png erzeugen
 #   make clean
 
 ARCH    ?= x86_64
@@ -94,7 +94,7 @@ test: $(ISO)
 	    --log build/serial-bios.log --shot build/screen-bios.png
 
 font:
-	$(PYTHON) tools/mkfont.py /usr/share/consolefonts/spleen-8x16.psfu.gz kernel/core/font8x16.c
+	$(PYTHON) tools/mkfont.py raw_assets/charmap01.png kernel/core/font8x8.c
 
 clean:
 	rm -rf build/$(ARCH) build/iso_root $(ISO) build/*.png build/*.log
