@@ -3,8 +3,11 @@
 rctos ist ein kleines Betriebssystem, das nicht auf Unix aufbaut. Es überträgt das
 Paradigma seines Geschwisters RCP-OS auf PC- und ARM-Hardware: **viel erreichen mit wenig
 Ressourcen**, in einer Mikro-Umgebung, die man ganz überblicken, messen und lesen kann.
-Darauf läuft als einziger großer Gast eine GPU-beschleunigte Chromium-Instanz. Dieselbe
-Basis soll auf Embedded-Geräten und auf vollständigen Desktops laufen.
+Die Oberfläche ist eine Fensterschicht auf einem Raster von 8 × 8 Pixeln, mit dem
+Zellenmodell von RCP-OS: Fenster rasten ein, jedes Fenster ist zugleich ein Terminal, und
+neu gezeichnet wird nur, was sich ändert. Moderne Web-Darstellung liefert Chromium als
+einziger großer Gast, in Fenstern oder im Vollbild. Dieselbe Basis soll auf
+Embedded-Geräten und auf vollständigen Desktops laufen.
 
 > **Status:** M0 ist erledigt. Der Kernel bootet in QEMU (UEFI und BIOS), zeigt seinen
 > Boot-Bericht auf dem Bildschirm, prüft seine Budgets und schläft, bis sich die Uhr ändert.
@@ -15,7 +18,8 @@ Basis soll auf Embedded-Geräten und auf vollständigen Desktops laufen.
 
 | Thema | Festlegung | Stand M0 |
 |---|---|---|
-| Leitbild | Mikro-Welt klein, gemessen, inspizierbar; Chromium ist der Gast und die eine Ausnahme | |
+| Leitbild | Mikro-Welt klein, gemessen, inspizierbar; volle Kraft für den User-Space; Chromium ist der Gast und die eine Ausnahme | |
+| Oberfläche | Fensterschicht der Mikro-Welt, 8 × 8-Zellen (Schrift `charmap01.png`), Zellenmodell 1:1 aus RCP-OS | Boot-Konsole in 8 × 8 |
 | Kernel | Mikrokernel in C11, Image ≤ 1 MiB (Ziel ≤ 256 KiB), ≤ 10.000 Zeilen | 28 KiB, 1.472 Zeilen |
 | RAM-Bedarf | Mikro-Welt ohne GUI und Netz im Leerlauf: ≤ 512 KiB resident | Kernel: 20 KiB Code, 32 KiB Daten |
 | Multitasking | präemptiv, SMP, 32 feste Prioritätsstufen, tickless | Leerlauf: 1 Aufwachen pro Minute |
@@ -59,6 +63,7 @@ auf einen USB-Stick schreiben.
 | 08 | [Plattformen](docs/08-plattformen.md) | x86-64 und AArch64, Boot mit Limine, Referenzmaschine, Referenz-Hardware |
 | 09 | [Die Mikro-Welt](docs/09-mikro-welt.md) | `main.cfg`, Bodenkonsole, Prompt-Sprache, `/now`, Logs, Exponate, Systemoberflächen |
 | 10 | [rcfs](docs/10-rcfs.md) | das Dateisystem aus der rcp-fs-Familie (Entwurf) |
+| 11 | [Fensterschicht und Zellenmodell](docs/11-fenster.md) | Zellenmodell 1:1 aus RCP-OS, Fenster auf dem 8 × 8-Raster, Render-Instanzen, Energie |
 
 ## Verzeichnisse
 

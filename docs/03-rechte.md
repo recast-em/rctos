@@ -92,7 +92,7 @@ max_priority = 20
 memory       = guest         ; Kontingent aus main.cfg (guest_memory)
 handles      = 65536
 service      = fs net display input gpu audio fonts
-permission   = jit display.lease input.focus process.spawn
+permission   = jit display.fullscreen process.spawn
 ```
 
 Manifeste haben dasselbe Format wie `main.cfg` ([09](09-mikro-welt.md#maincfg)): eine Zeile
@@ -103,7 +103,8 @@ Schlüssel startet nicht.
 |---|---|
 | `jit` | Prozess bekommt ein `EXEC`-Ressourcen-Handle |
 | `process.spawn` | Prozess darf Kindprozesse anlegen (Kontingent wird geteilt) |
-| `display.lease` | Prozess darf eine Anzeige exklusiv übernehmen |
+| `display.lease` | Prozess hält die Anzeige; im Normalbetrieb nur `win` ([11](11-fenster.md)) |
+| `display.fullscreen` | Prozess darf die ganze Anzeige für sich verlangen (Vollbild); `win` gibt die Lease ab und wartet |
 | `framebuffer.map` | Prozess darf den Framebuffer der Lease direkt einblenden |
 | `input.focus` / `input.grab` | Eingaben empfangen bzw. exklusiv erhalten |
 | `ioport:<von>-<bis>` | direkter IO-Port-Zugriff (nur x86-64, nur für Treiber und Diagnose) |

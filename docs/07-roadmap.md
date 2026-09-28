@@ -52,16 +52,20 @@ ist ≤ 256 KiB groß und hat ≤ 10.000 Zeilen.
   `/now`-Server (`tasks`, `mem`, `budget`, `boot`, `log`)
 - `devmgr`: ACPI-Tabellen (ohne AML), PCI über ECAM, Manifeste, `/now/devs`, `/now/res`
 - Treiber-Kit, Treiber `uart16550`, `efifb`, `ps2`, `pci`
-- `console`: die Bodenkonsole auf Bildschirm und serieller Schnittstelle, mit dem
-  Rettungs-Prompt ([09](09-mikro-welt.md#die-prompt-sprache)); Statuszeile `HH:MM  U <uid>`
+- `term`: Terminal und Bodenkonsole, auf der seriellen Schnittstelle und als Fenster, mit
+  dem Rettungs-Prompt ([09](09-mikro-welt.md#die-prompt-sprache))
+- `win` und `shell` ([11](11-fenster.md)): Zellenmodell 1:1 aus RCP-OS, Fenster auf dem
+  Raster, Besitzkarte, Schatten als Schattierung, Zellen-Compositor auf der CPU über `efifb`,
+  Leiste und Status-Kachel, Mauszeiger, Eingabe über `ps2`
 - die ersten Werkzeuge (`help`, `ls`, `cat`, `tasks`, `mem`, `kill`, …), jedes ≤ 16 KiB
-- die Zellenkonsole als gemeinsames C-Modul von Kernel und `console`
+- die Zellenkonsole als gemeinsames C-Modul von Kernel und `win`
 
 **Abnahme:** Das Profil `minimal` bleibt in QEMU unter **512 KiB RAM**, und die CI prüft
 das über `/now/budget`. `cat /now/tasks` zeigt alle Prozesse. Eine absichtlich fehlerhafte
-`main.cfg` startet das Referenzprofil und nennt Zeile und Grund. Ein Programm schreibt über
-`display.lease` und `map_framebuffer` direkt in den Framebuffer, und der Widerruf gibt den
-Bildschirm an die Konsole zurück. Vom Bootloader bis zum Prompt vergeht höchstens 1 s.
+`main.cfg` startet das Referenzprofil und nennt Zeile und Grund. Zwei Terminal-Fenster
+lassen sich verschieben; `/now` zeigt, dass dabei nur beschädigte Zellen neu gezeichnet
+werden, und ohne Eingabe wacht keine CPU auf. Schließt das letzte Fenster, steht die
+Bodenkonsole wieder da. Vom Bootloader bis zum Prompt vergeht höchstens 1 s.
 
 ## M3 – Speicher und Netz (M–L)
 
@@ -86,8 +90,8 @@ der Mikro-Welt lädt eine Datei über HTTP.
   ([06](06-chromium.md#schlank-einbetten))
 
 **Abnahme:** `content_shell --single-process` zeigt in QEMU eine Webseite mit JavaScript
-an. Beim Beenden steht die Bodenkonsole wieder da, und `/now/mem` zeigt denselben Stand
-wie vor dem Start.
+an, und zwar in einem Fenster der Fensterschicht. Beim Beenden zeigt `/now/mem` denselben
+Stand wie vor dem Start.
 
 ## M5 – Der Gast mit mehreren Prozessen, CAST (L)
 

@@ -3,6 +3,7 @@
 - Dokumente auf Deutsch, Bezeichner im Code auf Englisch.
 - **Sprache: C11 (Kernel freestanding), Assembler nur in `kernel/arch/`. Kein Rust** – ausdrücklicher Wunsch des Projektinhabers. Rust nicht vorschlagen und nicht einführen; einzige geduldete Ausnahme sind Rust-Komponenten, die Chromium selbst mitbringt (siehe `docs/06-chromium.md`).
 - **Leitbild Mikro-Umgebung** (`docs/00-vision.md`): klein, gemessen, inspizierbar, explizit statt automatisch. Chromium ist der Gast und die eine Ausnahme; nichts in der Mikro-Welt entsteht nur für ihn. Die Mikro-Welt braucht keine libc, POSIX gibt es nur im Gast.
+- Oberfläche: Fensterschicht der Mikro-Welt auf 8 × 8-Zellen, Zellenmodell 1:1 aus RCP-OS (`docs/11-fenster.md`); Chromium ist nur Render-Instanz in Fenstern oder im Vollbild. Zellen verdoppeln nur per `cell_double` in `main.cfg`.
 - Kein Overengineering: flache C-APIs, statisch gelinkt, keine Zwischenschichten „für später“.
 - Budgets aus `kernel/core/budget.h` und `docs/00-vision.md` sind verbindlich (Kernel ≤ 1 MiB, ≤ 10.000 Zeilen, Profil `minimal` ≤ 512 KiB RAM); beide Stellen ändern sich nur gemeinsam.
 - Zeichenketten, die Bildschirm oder serielle Schnittstelle erreichen: ASCII, Meldungen englisch; CP437-Zeichen oberhalb 0x7F als `\xNN`.

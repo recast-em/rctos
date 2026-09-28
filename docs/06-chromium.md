@@ -3,15 +3,18 @@
 ## Der Gast
 
 Chromium ist die eine große Ausnahme vom Leitbild ([00](00-vision.md#zwei-welten)): ein
-riesiges Projekt, das die Denkweise der Mikro-Welt nicht teilt, aber das Web mitbringt und
-die Grundlage der Fensterverwaltung ist. Deshalb bekommt es einen klaren Rahmen. **Der
+riesiges Projekt, das die Denkweise der Mikro-Welt nicht teilt, aber moderne
+Web-Darstellung mitbringt. Er ist eine **Render-Instanz** in Fenstern der Mikro-Welt
+([11](11-fenster.md#render-instanzen)), kein Fenster-Server. Deshalb bekommt er einen
+klaren Rahmen. **Der
 Gast darf groß sein, aber nicht übergriffig.**
 
 1. **Kontingent statt Anspruch.** Der Gast lebt in einem festen Kontingent aus `main.cfg`
    (`guest_memory`). Bei Speicherdruck bekommt er das Ereignis und verwirft Tabs; stellt er
    mehr Speicher an, scheitert die Anforderung, und nur er selbst ist betroffen.
-2. **Der Bildschirm ist geliehen.** Der Gast zeichnet nur, solange er die Lease hält. Endet
-   er oder stürzt er ab, steht die Bodenkonsole wieder da ([05](05-grafik.md#zwei-welten-auf-einem-bildschirm)).
+2. **Er zeichnet in Fenster, die ihm die Fensterschicht gibt.** Verdeckte oder minimierte
+   Fenster bekommen keine Frames. Vollbild gibt es auf Wunsch mit `display.fullscreen`;
+   endet er oder stürzt er ab, zeichnet `win` wieder ([05](05-grafik.md#wer-zeichnet-was)).
 3. **Keine Systemrechte.** Kein `INSPECT`, keine Anmeldung, keine Treiber, keine
    Ressourcen. Passwörter der Anmeldung sieht er nie.
 4. **Leise.** Kein Netzverkehr, den der Nutzer nicht auslöst: keine Google-Dienste, keine
@@ -28,20 +31,19 @@ Gast darf groß sein, aber nicht übergriffig.**
 ## Schlank einbetten
 
 Chromium besteht grob aus der Content-Schicht (Blink, V8, Netzwerk, GPU, Viz) und dem
-Chrome-Browser darüber (Profile, Synchronisation, Erweiterungen, Einstellungen, Ash). Die
-Empfehlung: **nur die Content-Schicht einbetten**, mit einem eigenen, kleinen Einbetter
-`surf` (der Name kommt von der Browser-App in RCP-OS). Den gleichen Weg gehen Fuchsias
-WebEngine und die Cast-Geräte.
+Chrome-Browser darüber (Profile, Synchronisation, Erweiterungen, Einstellungen, Ash).
+**Entschieden (2026-09-28): nur die Content-Schicht wird eingebettet**, mit einem kleinen
+Einbetter `surf` (der Name kommt von der Browser-App in RCP-OS). Den gleichen Weg gehen
+Fuchsias WebEngine und die Cast-Geräte.
 
-| | Content-Einbettung (`surf`) | Vollständiger Chrome-Browser mit Ash |
-|---|---|---|
-| Umfang | Content-Schicht plus einige tausend Zeilen Einbetter | zusätzlich das gesamte `//chrome` |
-| Fensterverwaltung | eigene, kleine Verwaltung auf Aura: Fenster, Leiste, Fokus | Ash, die Fensterverwaltung von ChromeOS |
-| Browser-Funktionen | Adressleiste, Tabs, Downloads, Berechtigungen: selbst gebaut, schmal | alles vorhanden, auch was niemand braucht |
-| Google-Dienste, Sync, Erweiterungen | gar nicht erst vorhanden | abzuschalten |
-| Portierungsaufwand | geringer | deutlich höher |
+- **Keine Fensterverwaltung im Gast.** Fenster kommen von `win`; jedes Chromium-Fenster
+  (`PlatformWindow`) ist ein natives Fenster, wie bei der Wayland-Anbindung von Ozone. Ash
+  und `//chrome` braucht es nicht.
+- **Browser-Funktionen schmal und selbst gebaut:** Adressleiste und Tabs in Zellen oder als
+  Web-Inhalt, Downloads, Berechtigungen.
+- **Google-Dienste, Sync und Erweiterungen** gibt es gar nicht erst.
 
-Die Entscheidung fällt in M4. Bis dahin ist `content_shell` das Ziel der Portierung.
+Bis `surf` steht, ist `content_shell` das Ziel der Portierung.
 
 ## Strategie der Portierung
 
@@ -124,7 +126,7 @@ Page-Flip, Overlays) und `flatland` (Fuchsia).
 | Ozone-Schnittstelle | Umsetzung |
 |---|---|
 | `OzonePlatform` | Initialisierung, Verbindung zu `display` und `input` |
-| `PlatformWindow` | ein Vollbildfenster pro Anzeige; die Fenster darin verwaltet der Einbetter (Aura) |
+| `PlatformWindow` | ein natives Fenster von `win` mit einer GPU/Web-Render-Instanz; Titelzeile, Verschieben und Größe (in ganzen Zellen) übernimmt die Shell |
 | `PlatformScreen` | Anzeigen und Modi aus `display.list` |
 | `SurfaceFactoryOzone::CreateCanvasForWidget` | **G0:** Software-Ausgabe, kopiert in den per `map_framebuffer` eingeblendeten Speicher |
 | `SurfaceFactoryOzone::CreateVulkanImplementation` | **G1/G2:** `VulkanImplementationRctos` lädt das Treibermodul, das `gpu.query(MODULE)` liefert |
@@ -178,7 +180,7 @@ Page-Flip, Overlays) und `flatland` (Fuchsia).
 | Mojo und Prozessstart | mittel | gering (Fuchsia-Vorlage) |
 | Ozone G0 | gering | gering |
 | Ozone G1/G2 und Vulkan-Erweiterungen | hoch | mittel |
-| Einbetter `surf` (Fensterverwaltung, Adressleiste, Tabs, Downloads) | mittel | gering |
+| Einbetter `surf` (Adressleiste, Tabs, Downloads) | mittel | gering |
 | Build-System und Toolchain | mittel | **hoch (Chromiums Rust-Komponenten)** |
 | laufende Pflege | dauerhaft | hoch, wenn die Patches ausufern |
 

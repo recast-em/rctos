@@ -25,17 +25,18 @@ Das Credo in drei Sätzen:
 
 | | Mikro-Welt | Gast |
 |---|---|---|
-| Was | Kernel, Dienste, Treiber, Werkzeuge, Bodenkonsole, Systemoberflächen | Chromium mit seinen Begleitern: Mesa-Treibermodul, musl-libc, ICU, Schriften |
+| Was | Kernel, Dienste, Treiber, Fensterschicht und Shell, Werkzeuge, Bodenkonsole, Systemoberflächen | Chromium mit seinen Begleitern: Mesa-Treibermodul, musl-libc, ICU, Schriften |
 | Maßstab | jedes Byte hat einen Namen und ein Budget | eigenes Kontingent aus `main.cfg`, gemessen und begrenzt |
 | Code | eigener, lesbarer C-Code; ein Mensch kann ihn ganz lesen | übernommen; Änderungen nur als Patch-Stapel |
 | Schnittstellen | Kits und Protokolle, kein POSIX | POSIX-Teilmenge als Bibliothek, **nur** im Gast |
 | Zeichensatz | ein Byte, ein Zeichen (CP437) | Unicode |
 | Ohne den anderen | voll funktionsfähig: Konsole, Dateien, Netz, Anmeldung | läuft nie ohne die Mikro-Welt |
 
-Chromium ist die Grundlage der Fensterverwaltung und der Oberfläche. Es ist aber **die
-eine Ausnahme** vom Paradigma und bleibt ein Gast: Es bekommt den Bildschirm geliehen,
-lebt in einem festen Kontingent und lässt sich beenden und neu starten, ohne dass die
-Mikro-Welt es merkt. Alles um den Gast herum tritt deutlich kleiner auf und bleibt im
+Die Oberfläche gehört der Mikro-Welt: eine Fensterschicht auf dem 8 × 8-Raster mit dem
+Zellenmodell von RCP-OS ([11](11-fenster.md)). Chromium ist **die eine Ausnahme** vom
+Paradigma und bleibt ein Gast: eine Render-Instanz für moderne Web-Darstellung in Fenstern
+oder im Vollbild, in einem festen Kontingent, jederzeit beendbar, ohne dass die Mikro-Welt
+es merkt. Alles um den Gast herum tritt deutlich kleiner auf und bleibt im
 Hintergrund.
 
 ## Leitsätze
@@ -154,7 +155,7 @@ der Framebuffer.
 | `init` (mit Namensdienst und Starter) | 80 KiB | – |
 | `devmgr` | 72 KiB | – |
 | Treiber `uart16550` | 48 KiB | – |
-| `console` (Bodenkonsole über die serielle Schnittstelle) | 64 KiB | – |
+| `term` (Bodenkonsole über die serielle Schnittstelle) | 64 KiB | – |
 | **Summe (1 CPU)** | **≤ 496 KiB**, harte Grenze 512 KiB | |
 
 Jede weitere CPU kostet etwa 16 KiB. Die größten Hebel sind **Seitentabellen** (etwa
@@ -194,8 +195,8 @@ es in jedem Profil.
 
 | Profil | Inhalt | Zweck |
 |---|---|---|
-| `minimal` | Kernel, init, devmgr, uart16550, console | Budget-Nachweis, Kernel-Tests |
-| `embedded` | + Dateisystem, Anzeige, Eingabe, optional Netz; Programme der Mikro-Welt | Kiosk, Steuerung, Anzeige ohne Browser |
+| `minimal` | Kernel, init, devmgr, uart16550, term | Budget-Nachweis, Kernel-Tests |
+| `embedded` | + Dateisystem, Anzeige, Eingabe, Fensterschicht, optional Netz; Programme der Mikro-Welt | Kiosk, Steuerung, Anzeige ohne Browser |
 | `desktop` | + GPU-Treiber, Netz, Audio, der Gast | das vollständige System |
 
 ## Familie RCP-OS
@@ -210,7 +211,8 @@ die Haltung.
 | `/now`-Tabellen, Serialisierung als kommagetrennte Zeilen | [09](09-mikro-welt.md#now--der-zustand-als-tabellen) |
 | Namensregeln (28 Byte, `0-9 A-Z a-z . _`) und uid-Bereiche, Heimat `/usr/<uid>` | [10](10-rcfs.md), [03](03-rechte.md#identität-und-sitzungen) |
 | Dateisystem-Familie rcp-fs: 4-KiB-Blöcke, 64-Byte-Einträge, Ringdateien für Logs | [10](10-rcfs.md) |
-| Bodenkonsole, Status-Kachel `HH:MM  U <uid>`, Vollbild-Oberflächen statt Popups | [09](09-mikro-welt.md) |
+| Zellenmodell 1:1: `TEXT`/`ATTR`/`CTRL`, Zeichensatz-Slots, Paletten in RGB332, Schattierung, Ebenen-Zellen | [11](11-fenster.md) |
+| Fenster auf dem Raster, Leiste mit höchstens zehn Programmen, Status-Kachel `HH:MM  U <uid>`, Bodenkonsole, Vollbild-Oberflächen statt Popups | [11](11-fenster.md), [09](09-mikro-welt.md) |
 | CP437 in der Konsole, ASCII in Quellen, Sonderzeichen als `\xNN` | [09](09-mikro-welt.md#zeichensatz) |
 | Recaster-Blau `#2449AA` (RGB332 `0x2A`) als Eintrag 1 der Palette | Kernel-Konsole |
 | Boot-Epoche 2026-10-09 10:10 UTC für reproduzierbare Tests | `tools/qemu.py --rtc family` |
@@ -219,7 +221,7 @@ die Haltung.
 |---|---|
 | Hardware-MMU statt Software-MMU und Bytecode-VM | x86-64 und ARMv8-A haben eine MMU |
 | Ausführen am Ort aus dem RAM-Boot-Image statt XIP aus Flash | PCs haben Blockgeräte, keinen memory-mapped Flash |
-| GPU und Framebuffer statt Zeilen-Compositor | die Anzeige erledigt die Hardware |
+| Zellen-Compositor nach Schaden statt Zeilen-Compositor, keine Raster-Effekte je Zeile | die Anzeige liest aus dem Speicher, es gibt keinen Strahl |
 | Unicode im Gast | das Web ist Unicode |
 
 Offene Familienfrage: Die Prompt-Sprache der Bodenkonsole soll CAST werden
@@ -238,6 +240,8 @@ Offene Familienfrage: Die Prompt-Sprache der Bodenkonsole soll CAST werden
 | 2026-09-28 | Konsole: CP437, Palette 0 = EGA mit Recaster-Blau. |
 | 2026-09-28 | Zellen sind 8 × 8 Pixel, Schrift ist `charmap01.png` der Familie (RCP-OS); die PNG ist die eine Wahrheit, `tools/mkfont.py` erzeugt daraus den C-Code. |
 | 2026-09-28 | Zellen werden nur auf Wunsch verdoppelt, und nur als ganze Verdopplung jeder Zeile und Spalte (2 × 2): `cell_double` in `main.cfg`, Vorgabe `no`. Keine automatische Skalierung. |
+| 2026-09-28 | Die Fensterschicht gehört der Mikro-Welt; das **Zellenmodell von RCP-OS gilt 1:1** ([11](11-fenster.md)). Chromium ist eine Render-Instanz in Fenstern oder im Vollbild. |
+| 2026-09-28 | Chromium wird nur mit der Content-Schicht eingebettet (`surf`), ohne `//chrome` und Ash. |
 | 2026-09-28 | Credo: reduziertes System, volle Kraft für den User-Space, Bedienung durch Führung, ein 8 × 8-Raster für alles, Web in Fenstern oder im Vollbild. |
 | 2026-09-28 | Bootloader Limine 11.4.1 (Basisrevision 6), Version und Prüfsummen fest in `boot/limine.sha256`. |
 
@@ -249,7 +253,7 @@ Offene Familienfrage: Die Prompt-Sprache der Bodenkonsole soll CAST werden
 | Prompt-Sprache der Bodenkonsole | CAST (Familie); M2 startet mit dem Rettungs-Prompt von RCP-OS | eigener minimaler Befehlsinterpreter | M5 |
 | Netzstack | lwIP (C, klein, ausgereift) | eigener minimaler IPv4/IPv6-Stack | M3 |
 | rcfs: Dateien über 4 GiB | v1 begrenzt auf 4 GiB je Datei (bewusste Grenze) | 64-Bit-Größe in einer Formatrevision | M3 |
-| Einbettung von Chromium | nur die Content-Schicht, eigene kleine Shell ([06](06-chromium.md#schlank-einbetten)) | vollständiger Chrome-Browser mit Ash | M4 |
+| Sprites in der Fensterschicht | Überlagerungen im OAM-Format von RCP-OS | weglassen | M2 |
 | ARM-Referenzboard | Raspberry Pi 5 (V3D, Mesa `v3dv`) | RK3588-Board (Mali-G610, Mesa `panvk`) | M9 |
 
 ## Glossar
@@ -271,5 +275,8 @@ Offene Familienfrage: Die Prompt-Sprache der Bodenkonsole soll CAST werden
 | Kit | Gruppe von API-Aufrufen: System-Kit, Treiber-Kit, User-Kit |
 | Treiberpaket | Treiberprozess, Manifest und optional ein Treibermodul (z. B. ein Vulkan-ICD) |
 | Lease | zeitweise exklusive Nutzung eines Geräts, etwa eines Bildschirms; widerrufbar |
+| Zelle | 8 × 8 Pixel mit drei Bytes: Zeichen (`TEXT`), Farben (`ATTR`), Steuerung (`CTRL`) |
+| Fensterschicht | `win`: Fenstertabelle, Besitzkarte, Zellen-Compositor; die Politik macht `shell` |
+| Render-Instanz | Quelle für den Inhalt eines Fensterbereichs: Zellen, Leinwand, Fläche, GPU/Web |
 | Ringdatei | Datei fester Größe, die sich selbst überschreibt: die letzten N KiB, immer |
 | rcfs | das Dateisystem von rctos aus der rcp-fs-Familie |

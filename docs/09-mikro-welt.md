@@ -8,11 +8,13 @@ Quellen dort sind `shell-v3.md`, `cast-shell.md`, `architecture.md` und `rcp-fs.
 ## Überblick
 
 ```
-┌────────────────────────── Gast: Chromium (Kontingent, Lease) ──────────────────────────┐
+┌──────────────── Gast: Chromium (Kontingent, Render-Instanz in Fenstern) ───────────────┐
 └─────────────────────────────────────────┬─────────────────────────────────────────────┘
-                                          │ Kanäle: Dateien, Netz, Anzeige, Eingabe, GPU
+                                          │ Kanäle: Fenster, Dateien, Netz, Eingabe, GPU
 ┌──────────────────────────────── Mikro-Welt ───────────────────────────────────────────┐
-│ console     Bodenkonsole: Prompt auf Bildschirm und serieller Schnittstelle           │
+│ win         Fensterschicht: Fenster, Besitzkarte, Zellen-Compositor ([11])            │
+│ shell       Leiste, Status-Kachel, Fensterpolitik                                     │
+│ term        Terminal; als Bodenkonsole das Fenster über den ganzen Grund              │
 │ login       Anmeldung, Sperre, Benutzerwechsel (Vollbild-Oberfläche)                  │
 │ fs          Dateisystem rcfs, Namensraum, /tmp                                        │
 │ net         Netzstack (lwIP)                                                          │
@@ -20,7 +22,7 @@ Quellen dort sind `shell-v3.md`, `cast-shell.md`, `architecture.md` und `rcp-fs.
 │ init        Start, Namensdienst, Starter, /now                                        │
 │ Treiber     je ein Prozess                                                            │
 │ Kernel      Adressräume, Threads, IPC, Handles, Interrupts, Zeit                      │
-└──────────────────────────────────────────────────────────────────────────────────────┘
+└───────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
 Jeder Prozess der Mikro-Welt ist ein kleines, statisch gelinktes Programm, das nur die Kits
@@ -55,6 +57,9 @@ Startsatz der Schlüssel (er wächst mit den Meilensteinen):
 | `console` | `screen`, `serial`, `both` | `both` | wo die Bodenkonsole lebt |
 | `ground_init` | eine Prompt-Zeile | – | läuft unsichtbar vor dem ersten Prompt |
 | `guest` | Programmpfad | – | der Gast (Chromium-Einbettung) |
+| `appbar` | `on`, `auto`, `off` | `on` | Leiste der Shell in den untersten vier Zellzeilen |
+| `ground` | `console`, `plain` | `console` | leerer Bildschirm = Bodenkonsole, oder nur der Grund (Kiosk) |
+| `ground_color_index` | 0–15 | `1` | Farbe des Grunds aus Palette 0 |
 | `guest_memory` | Größe (`K`, `M`, `G`) | 50 % des RAM | Kontingent des Gasts |
 | `net_memory` | Größe | `4M` | Puffer des Netzstacks |
 | `fs_cache` | Größe | `64M` | Dateisystem-Cache, feste Obergrenze |
@@ -78,25 +83,26 @@ user_login   = none
 **Die leere Oberfläche ist eine Konsole.** Wer das Gerät einschaltet, bekommt einen Prompt,
 wie beim Heimcomputer. Die Regeln übernehmen die „Ground Console“ von RCP-OS:
 
-1. **Sie hat den Bildschirm, wenn ihn niemand sonst hat.** Hält der Gast die Lease auf die
-   Anzeige, schläft die Konsole; ihre Sitzung (Verzeichnis, Variablen, Verlauf) bleibt
-   erhalten. Endet der Gast oder stürzt er ab, fällt die Lease an die Konsole zurück, und
-   sie steht wieder, mit leerem Bildschirm.
+1. **Sie existiert nur auf leerem Grund.** Sobald irgendein Fenster aufgeht, schließt die
+   Fensterschicht das Konsolenfenster, bevor das neue Fenster entsteht; kein Fenster liegt
+   je auf Konsolenzellen. Schließt das letzte Fenster, steht die Konsole wieder da, mit
+   leerem Bildschirm. Ihre Sitzung (Verzeichnis, Variablen, Verlauf) bleibt dazwischen
+   erhalten, die Konsole schläft nur.
 2. **Sie ist immer auch auf der seriellen Schnittstelle da.** Dieselben Bytes, dieselbe
    Sitzung: Ein Gerät ohne Bildschirm ist genauso bedienbar.
-3. **Kein Rückspeicher.** Der Bildschirm ist ihr Speicher. Zellen werden nur gemalt, wenn
-   sie sich ändern, und dann genau einmal. So arbeitet schon die Kernel-Konsole von M0.
-4. **Aussehen:** Zellen von 8 × 8 Pixeln in der Schrift der Familie (`charmap01.png`), CP437, Palette 0 aus den EGA-Farben mit dem
-   Recaster-Blau als Eintrag 1; schwarzer Grund. Die letzte Zeile ist die **Statuszeile**:
-   links der Zustand, rechts die Kachel `HH:MM  U <uid>`. Die Uhr zeigt bewusst keine
+3. **Kein Rückspeicher, kein Chrome.** Sie ist ein Fenster ohne Titelzeile über den ganzen
+   Grund (über der Leiste, falls die an ist); die Zellen des Bildschirms sind ihr Speicher.
+   So arbeitet schon die Kernel-Konsole von M0.
+4. **Aussehen:** Zellen von 8 × 8 Pixeln in der Schrift der Familie (`charmap01.png`),
+   CP437, Palette 0 aus den EGA-Farben mit dem Recaster-Blau als Eintrag 1; der Grund hat
+   die Farbe `ground_color_index`. Die Uhr in der Status-Kachel zeigt bewusst keine
    Sekunden: Ohne Sekunden gibt es nichts zu animieren, und die CPU schläft bis zur
    nächsten Minute.
 5. **Erste Zeile:** `ground_init` aus `main.cfg` läuft unsichtbar vor dem ersten Prompt.
-6. **Der Bildschirm wird geliehen.** Programme, die aus der Konsole starten, dürfen mit der
-   Berechtigung `framebuffer.map` direkt auf den Bildschirm zeichnen; beim Ende des
-   Programms fällt er an die Konsole zurück ([03](03-rechte.md#direktzugriff)).
+6. **Der Bildschirm wird geliehen.** Programme, die aus der Konsole starten, zeichnen auf
+   ihr Fenster (Zellen und Leinwand), solange es steht.
 7. **Die sichere Tastenkombination** (Vorgabe Strg+Alt+Entf) führt immer zur Mikro-Welt
-   zurück, egal wer die Lease hält.
+   zurück, auch aus einem Vollbild-Programm.
 
 ## Die Prompt-Sprache
 
@@ -146,7 +152,7 @@ gewählt hat.
 | `/now/res` | `kind, range, owner` (das Ressourcenbuch) | `devmgr` |
 | `/now/vol` | `kind, writable, block, blocks, free` | `fs` |
 | `/now/net` | `if, state, address, rx, tx` | `net` |
-| `/now/screen` | die Zellen der Konsole als Text | `console` |
+| `/now/screen` | die Zellen des Bildschirms als Text | `win` |
 
 Wer die Tabellen lesen darf: alle angemeldeten Sitzungen, außer `/now/log` (nur die
 Admin-Sitzung). Programme der Mikro-Welt sind nur Sichten auf diese Quellen: Ein späteres
